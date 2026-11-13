@@ -1,0 +1,8 @@
+.env*
+!.env.example
+__pycache__/
+*.sqlite*
+runner-data/
+*.key
+*.pem
+.DS_Store
