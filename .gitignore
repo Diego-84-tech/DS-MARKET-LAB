@@ -9,3 +9,5 @@ runner-data/
 
 node_modules/
 .netlify/
+
+supabase/.temp/

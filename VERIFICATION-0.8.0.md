@@ -21,3 +21,9 @@ Owner authorized Supabase, GitHub push and Netlify publication on 2026-11-15. Ba
 Tonight (2026-11-15) is retained as an interrupted day and explicitly excluded from full-day comparison, per owner report of roughly six hours interrupted. Tomorrow's review is eligible. This affects review labeling only: historical financial records and balances are preserved.
 
 Post-migration security advisor checked: Market Lab archive tables intentionally use deny-by-default RLS without direct client policies; access is through the owner/worker checked RPC. No new Market Lab exposed-definer or mutable-search-path warning. Other DS HUB app advisories were not changed in this release.
+
+## Hosted release verification
+- GitHub main pushed at 5adb582. Netlify production deploy 6afa39e9a31cc437c6cc643d reached ready for that exact commit.
+- Production /api/lab/config reports 0.8.0 and workerConfigured=true. Anonymous /api/lab/archives returns HTTP 401.
+- Hosted archive tables have RLS enabled and no direct SELECT privilege for anon or authenticated. Supabase migration succeeded without replacing or resetting an agent.
+- Scheduled worker readback at 2026-11-15 23:03:11 UTC: releaseVersion=0.8.0, mode=running, reviewRequired=false, error=null, agentRulesVersion=paper-research-v5; both agents lifecycle=active. AlphaBot recorded a new v5 HOLD decision at 23:03:07 UTC. Beta's prior v4 HOLD remains correctly tagged and will receive v5 at its next normal 30-minute decision; no forced extra call was made. Research spend readback $0.3352556 of existing $1/day and $30 total limits, reserved=0.
