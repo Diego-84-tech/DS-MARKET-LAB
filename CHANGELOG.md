@@ -1,0 +1,26 @@
+# Release notes
+
+## 0.4.0 — 2026-11-15
+
+- Added authenticated Trading, Agent Accounts, Loan Applications, and Kalshi Markets screens; old practice and browser saves remain separate.
+- Added $100/$500 paper agents with API decision summaries, self-selected names, shared research hypotheses, delayed fills and official settlement reconciliation.
+- Added owner-approved fake loans, annual 23/28/33% interest, $100/$500 principal ceilings, repayments and net-of-debt accounts.
+- Added isolated DS HUB ledger, atomic worker leases, scheduled Netlify jobs, compressed raw archives, storage guard, $1 daily/$30 total app API budget, and days 10/20/30 checkpoints.
+- Kept real-money trading absent. Server-backed release requires repository deployment; no static release ZIP generated.
+- Existing 30-day API key retained; December 10 renewal reminder created, with conservative December 14 runtime safety stop.
+- Local checks: syntax checks and all 37 tests pass. Public Kalshi series/book fee metadata and Coinbase reference verified; isolated database initialized paused and invalid session rejected. Live cloud deployment and scheduled-operation results are recorded in the final handoff.
+
+
+## 0.3.0 — 2026-11-13 (local changes)
+
+- Added a manually started, read-only public Kalshi REST collector for KXBTC15M Bitcoin 15-minute contracts. No credentials, orders, OpenAI, Supabase, or startup service.
+- Added a separate Live data page with market identity, receipt timing, top quotes/depth, raw timing distinctions, finalized outcomes and stale/error warnings. Fictional sessions and Strategy Lab remain separate.
+- Save timestamped raw responses and normalized snapshots in private NDJSON files outside the repository. Missing exchange timestamps and unavailable outcomes remain explicit.
+- Documented local operation, recording format, official API sources and limits. App/package display version is 0.3.0; the existing 0.1.0 practice-recording format and archived 0.1.0 ZIP remain unchanged.
+- Verification: syntax checks passed; all 27 tests passed (20 existing, 7 observation tests). Local browser verified collection status, stopped/stale warnings, and a separate fictional Strategy Lab evaluation. The live page has no horizontal overflow at 360px. Local endpoint returned 200, source/recording paths returned 404, and a foreign Host header returned 403.
+- Live sample: four snapshots received November 13, 2026, 7:41:15–7:41:30 PM EST for KXBTC15M-26NOV131945-45; five earlier finalized outcomes recorded. Last YES bid 24¢ / 2,368.93 contracts; derived YES ask 25¢ / 1,460.38 contracts. Quote exchange timestamp and this active contract's verified outcome were unavailable. These are observed snapshots, not trading-performance evidence.
+- Bounded collection is stopped. The local dashboard remains open at http://localhost:8081/#live. Changes are local, uncommitted and unpushed; no release ZIP or deployment was requested or made.
+
+## 0.2.0 — existing source baseline
+
+Strategy Lab with versioned deterministic paper tests and editable app sources (main commit 8e6cde0).

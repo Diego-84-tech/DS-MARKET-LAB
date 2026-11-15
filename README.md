@@ -1,70 +1,43 @@
-# DS Market Lab — 0.2.0 practice preview
+# DS Market Lab — 0.4.0 cloud paper experiment
 
-By DS TECHNOLOGY™ · DIEGOAT STUDIOS LLC.
+DS TECHNOLOGY™ · Real Kalshi public data, OpenAI research decisions, FAKE money only.
 
-## Strategy Lab update
+## Runtime and release
 
-Version 0.2.0 adds the Strategy page: Bitcoin price waves, per-round YES contract charts with gaps at expiry, and test equity. Select the last 10/100 rounds or 7/30/100 days of reached frames in the active recording. Available history is reported; a larger range never fabricates more data. The sample has only 90 minutes.
+Node 24, `npm ci`, `npm run check`, `npm test`. Deploy the established Git-connected Netlify project `ds-market-lab`. A Netlify HTTP function serves `/api/lab/*`; `paper-tick` runs every minute. No always-open browser, Mac, or artificial keepalive is required. Use scheduled bounded jobs rather than a perpetual loop; each tick acquires a four-minute database lease. Worker executions can restart without duplicating funded loans or ledger changes.
 
-The builder supports momentum/reversal rules, lookback, minimum spot movement, entry price ceiling, profit/loss exits, A entry budgets up to $10, and B allocations up to 100% of available cash. It emits one entry signal per market after the first two minutes, and uses only preceding/current data. Saved versions are immutable and stored in this browser; copying a version creates an editable draft. Export versions to retain a copy. Changing a draft invalidates its displayed test output.
+Version 0.4.0 supersedes the uncommitted 0.3.0 local collector and the 0.2.0 GitHub baseline. There is no delivery ZIP: a static ZIP omits the worker. The original 0.1.0 uploaded ZIP remains a historical archive. Practice fixtures retain data format 0.1.0 and their original $50 wallets, separately at `practice.html`; existing browser records are preserved.
 
-Evaluations use fresh $50 wallets, include the same modeled costs, and stay separate from original sessions. A test's recorded BUY and SELL reasons are available from its chart. Opening replay creates a separate session with that exact frozen rule configuration. Trial results are fictional/unverified simulations, not historical backtests or forward tests. These controls are user-authored; AI rule generation, real market collection, phone alerts, and long-term portfolio tracking remain future work.
+## Four screens
 
-GitHub source is now maintained in Diego-84-tech/DS-MARKET-LAB. The original uploaded ZIP is retained as an archive. netlify.toml runs checks/tests and publishes dist directly, replacing the earlier ZIP extraction configuration. No dependencies, credentials, or Mac interaction are needed to deploy this browser-only release. Data format remains 0.1.0 for compatibility with earlier recordings.
+Trading, Agent accounts, Loan applications, Kalshi markets. Sign in with the existing DS HUB owner account. Access is pinned to the existing owner user, not all DS HUB users. Session state is scoped to this app's browser session; signing out here does not purge other apps. No password reset or customer invitation is sent.
 
-This version implements the approved two-agent dashboard as a portable, dependency-free web app. Both charts show the same fictional contract and clock. Each agent has its own trade markers, fill details, cost accounting, and recorded explanations.
+Agent A: $100 fake cash, BTC 15-minute markets, model review at most every five minutes. Agent B: $500 fake cash, selected BTC hourly/daily and 15-minute contracts with latest expected expiration within 30 days, review at most every 30 minutes. B's supported universe is intentionally bounded and visible, not all Kalshi markets. Each agent chooses its own name on its first API decision. Both may spend available cash including fees, reuse proceeds, submit loan applications, repay debt, hold, or skip. At most eight open positions per agent protects state size, not trade dollars. No automatic bankroll refills.
 
-## Working now
+Daily API budget $1 UTC, total $30 for the experiment, using `gpt-4.1-mini-2025-04-14`, input $0.40 / million tokens and output $1.60 / million. Each request reserves $0.02 BEFORE network activity; failed/unknown requests retain a conservative charge. Limits cover this app's estimates, not other projects or provider-delayed account billing. Key safety stop December 14, 2026 at 11:59 PM EST, conservatively ahead of the existing 30-day key's expiry. A December 10 renewal reminder is configured in the Codex app. Keys never enter dist, source control, exports, or logs.
 
-- Compare / Replay / History / Results / Setup views, responsive for phones and desktops.
-- Two independent $50 wallets. A caps a position's entry cost, including modeled fees, at $10. B can spend any fraction up to available cash. Neither borrows or automatically refills. Closing a position permits another trade, including in the same market.
-- Reuse of principal, proceeds, and profits. Available cash and estimated equity are displayed separately.
-- A shared deterministic rule-based signal and shared exit rules, with different position sizing.
-- Three explicitly fictional scenarios: mixed, trending, and choppy. Each has six 15-minute rounds with 15-second frames.
-- Recorded buy / sell / settlement details, partial-fill accounting, quantity limits, modeled fees, realized net, estimated equity, and drawdown.
-- Replay hides later trade markers and results. Prices and events are displayed only up to the selected frame.
-- New tests retain previous sessions. Browser storage, JSON export/import, CSV export. Imports are labeled unverified.
+## Bank policy
 
-This is an interface/accounting test, not an AI forecasting system or a historical backtest. Sample P&L is not evidence of real-world profitability. Data and decisions are fictional; no API credits are used, no orders are sent, and no real funds are involved.
+$600 fake pool; owner approval for every loan. First maximum $50 / $250 at 23% ANNUAL simple interest. After repayment, up to $100 / $500. Additional borrowing with unpaid debt: maximum $25 / $125 at 28%, then $10 / $50 at 33%; further supplemental requests blocked until debt clears. Outstanding principal ceilings $100 / $500 include all loans; accrued interest remains owed beyond them. Rates on existing loans are fixed. Interest accrues daily, conservatively rounded to cents; due 30 days after funding. Repayment pays interest then principal; available cash is used at deadline and unpaid amounts remain recorded. Loans change cash and debt, never profit. Net account value subtracts principal and accrued interest.
 
-## Hosting
+## Paper execution assumptions
 
-`dist/` contains the complete static website. For Netlify manual deployment, upload the contents of the Netlify ZIP (index.html at its root), or deploy `dist/`. For a Git-connected Netlify project, the included netlify.toml runs `npm run check && npm test` and sets the publish directory to dist. No environment variables are needed for this version.
+Public REST only; no Kalshi credentials, order submission, funding, or live-money API exists. Markets and order books are separate responses. Receipt time is not exchange quote freshness. Coinbase spot reference is NOT the official settlement feed. Market rules, strikes, closing/expiration metadata and official nonprovisional settled/finalized yes/no results are retained; unknown outcomes remain open across rollover.
 
-A separate private review URL may be hosted temporarily for phone testing. It does not mean the app has been deployed to the user's Netlify account.
+Whole contracts only, queued limit intents delayed at least 10 seconds, filled at a later tick's quote, 180-second intent expiry, 10% of displayed best-level depth shared across agents. Unfilled remainder is not assumed filled. Models supply probability estimates, not proven skill; buys need a five-percentage-point estimated advantage allowance. Series must report quadratic fee metadata and a valid multiplier or fills are withheld. Taker fees are conservative modeled cents, not exact exchange billing precision. Spread/depth/latency are simplified; no queue model, true market impact, tick-level reconstruction, or guaranteed exit. Near-close exits are attempted; official settlement releases remaining funds only after receipt. Marks can be stale and are not executable guarantees.
 
-Browser records belong to that exact browser and website origin. They do not automatically transfer from the review URL to Netlify or from one device to another. Export/import is provided for moving copies. Clearing browser storage can remove local records; export important test sessions.
+Shared memory stores observations and hypotheses, not weight training. Prompt/model version and concise evidence/exit/repayment summaries are recorded. Checkpoints at days 10/20/30 compare net percentage returns, interest, realized results and open positions; this is not proof of profitability.
 
-## Run locally on the Mac later
+## Isolated persistence
 
-Install/use Node.js 18+ for checks. Run `npm test` to verify simulator behavior, then `python3 -m http.server 8080 --directory dist` to open the dashboard at http://localhost:8080. Do not open index.html with a file URL because ES modules need HTTP hosting.
+Supabase DS HUB `lfgmvycxqinoriamprhr`, `market_lab_private`: runtime, events, snapshots. All three tables have RLS, no public grants. The public invoker wrapper calls a private definer gateway that checks the pinned owner for reads and a hashed worker credential for mutations. Schema USAGE and function EXECUTE do not grant table access. The frontend has only a publishable key. Worker secret grants access ONLY to the Market Lab gateway, not other DS HUB apps. SQL is additive in `cloud/schema.sql`; production migration is recorded by Supabase. Existing DS HUB users, tables and data are untouched.
 
-This browser version pauses playback when the page is hidden. It is not an unattended market watcher. The actual Mac background runner is a separate next phase and has NOT been installed or started.
+Runtime state is capped at 200 KB; recent charts retain seven days. Financial/decision events remain intact. Compressed raw public data is stored in Netlify Blobs `market-lab-recordings`; archive objects older than 30 days are removed by bounded daily cleanup. Database guard pauses at 460 MiB to protect the shared free project's 500 MB quota. Storage and cloud request usage still need measurement during the short test. UI export contains current state and all paginated financial/decision events; raw recording archival is separate.
 
-For a reproducible command-line accounting run, use `node runner/practice.mjs mixed` (also accepts `trend` or `whipsaw`). It writes a practice recording to the path supplied as its second argument, or prints the final summary. No network requests or credentials are involved.
+## Deployment environment (server only)
 
-## Simulation assumptions
-
-Money is integer cents; contract quantity is stored as hundredths. Fractional contracts are a practice assumption and must be checked against a real market's current quantity rules before live-data paper tests. Contract price is integer ten-thousandths of a dollar.
-
-Fees are an illustrative taker-style calculation: round up 0.07 × contracts × price × (1 − price) in dollars to cents. This is a model assumption, not a verified current Kalshi fee schedule. Estimated equity uses the best bid less modeled fees for the whole open position; it is not a guaranteed executable amount. Entries use ask, exits use bid, quantity is limited by provided depth, and stale quotes prevent fills. No network latency, order queue, market impact beyond best-level depth, or adversarial price selection is modeled.
-
-The example signal uses only previous/current spot frames. Each round signals once at two minutes: YES if spot rose over the preceding 60 seconds, otherwise NO. A allocates up to $10; B allocates between 35% and 100% by this example's signal magnitude (90% in the choppy scenario). Exits attempt +12¢, −10¢, or 30 seconds to expiry. Expiry averages the final four fictional spot frames against the target; this is NOT asserted as Kalshi's actual resolution method.
-
-## Next phases — not connected
-
-1. Resolve and verify exact Kalshi BTC market rules, quote units, fees, quantity steps, outcome source, and timestamps. Add a read-only market collector and record real incoming quotes; never manufacture missing target/settlement data.
-2. Configure OpenAI access securely on the Mac/server. Use AI for evidence-based structured research and explanations; retain a deterministic accounting/risk gate. Secrets never enter the web bundle, logs, exported files, or repository.
-3. Resolve the exact Supabase project. Add isolated sessions, market frames, decisions, fills, wallet snapshots, and runner heartbeats with authentication and owner-only row-level access. Do not modify unrelated DS HUB tables or production data.
-4. Run a month of forward paper tests. Track attempted orders, realistic fill limitations, fees, drawdown, losses, and inactivity. Compare against simple baselines and separate strategy changes by version. A month alone does not establish a durable trading advantage.
-5. Consider live execution separately only after explicit authorization and appropriate controls. No live-order submission code exists here.
-
-The two wallets should be treated as sizing-policy experiments under the same strategy, not two independently trained AI agents. Reviewing results does not automatically train the underlying model.
-
-## Brand
-
-The name and screen direction are approved. Product icon artwork is still pending Diego's approval. No installable PWA or desktop .app is shipped yet. Add approved icon artwork to browser, Apple Home Screen, manifest, and desktop targets when those targets are actually delivered.
+`OPENAI_API_KEY` and `MARKET_LAB_WORKER_SECRET` are stored securely in Netlify runtime environment. Do not expose through build outputs. The locally approved `.env.local` is ignored and owner-readable only. All other URLs/keys in code are public configuration. Set Node 24. No Supabase service-role key is used.
 
 ## Verification
 
-`npm test` exercises wallet limits, reusable profits, accounting reconciliation, loss behavior, fee rounding, stale data, partial fills, settlement, complementary quotes, import validation, and reproducible replay. UI checks cover trade detail, rewind, completion, new sessions, and browser reload. Review widths down to 360px before final handoff.
+`npm run check && npm test` includes 37 tests: original accounting/strategy/observer tests plus cloud lending, approval idempotency, interest/partial repayment, debt tiers, delayed/shared-depth fills, settlement rollover, and budget reservations. Live public Kalshi series/book and Coinbase reference were checked during implementation; authorization failures are explicitly rejected. Deployment, actual cloud scheduled ticks, archived blobs and model responses must be verified separately before declaring the experiment running.

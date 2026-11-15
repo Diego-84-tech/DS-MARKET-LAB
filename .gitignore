@@ -6,3 +6,6 @@ runner-data/
 *.key
 *.pem
 .DS_Store
+
+node_modules/
+.netlify/
