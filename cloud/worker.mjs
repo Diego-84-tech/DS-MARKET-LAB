@@ -11,6 +11,7 @@ export async function runTick({archive=true}={}){
  try{
   if(!['running','settling'].includes(state.mode)){await commit();return {status:state.mode};}
   const now=Date.now();
+  if(state.phase==='verification'&&(!Number.isFinite(Date.parse(state.verificationEndsAt))||now>=Date.parse(state.verificationEndsAt))){state.mode='paused';state.error='Ten-minute cloud verification ended. Owner review required before the 30-day experiment.';await commit();return {status:'verification-ended'};}
   if(now>=Date.parse(state.endsAt)||now>=Date.parse(state.keyExpiresAt)){state.mode='settling';state.error='Test window or key safety deadline reached. No new entries or model calls; following existing positions to official outcomes.';for(const a of state.agents)a.orders=a.orders.filter(o=>o.action==='SELL');}
   if(lock.databaseBytes>460*1024*1024){state.mode='paused';state.error='DS HUB storage guard: database is above 460 MiB. No new market records or API calls.';await commit();return {status:'storage-paused'};}
   const raw=await collect(state,now);state.markets=raw.map(compactMarket);const markets=state.markets;
@@ -50,7 +51,7 @@ export async function control(jwt,action,payload={}){
  // A valid DS HUB owner session is mandatory; the gateway enforces the pinned owner ID.
  await gateway('read',{},jwt);const lock=await gateway('lease');if(lock.busy)throw Error('Worker is busy. Try again shortly.');const s=lock.state;let event;
  try{
-  if(action==='start'){const now=Date.now();if(!s.startedAt){s.startedAt=new Date(now).toISOString();s.endsAt=new Date(now+30*MS_DAY).toISOString();}if(now>=Date.parse(s.endsAt))throw Error('Experiment ended. Preserve records and review before a new experiment.');s.mode='running';s.error=null;event={type:'START',detail:'Owner enabled paper test'};}
+  if(action==='start'){const now=Date.now();if(s.phase==='verification'){if(s.verification.ticks<2)throw Error('Cloud verification must complete first.');s.phase='experiment';s.budget.cap=30;s.budget.dailyCap=1;s.verificationEndsAt=null;}if(!s.startedAt){s.startedAt=new Date(now).toISOString();s.endsAt=new Date(now+30*MS_DAY).toISOString();}if(now>=Date.parse(s.endsAt))throw Error('Experiment ended. Preserve records and review before a new experiment.');s.mode='running';s.error=null;event={type:'START',detail:'Owner enabled paper test'};}
   else if(action==='pause'){s.mode='paused';event={type:'PAUSE',detail:'Owner paused paper test'};}
   else if(action==='loan'){const a=approve(s,payload);event={type:'LOAN_REVIEW',application:a};}
   else throw Error('Unknown control');

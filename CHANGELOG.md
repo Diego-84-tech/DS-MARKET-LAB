@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.4.1 — 2026-11-15
+
+- Bounded initial cloud verification to ten minutes, with a $0.05 API ceiling and no automatic transition into the month-long experiment.
+- Explicit owner start transitions into the 30-day phase after successful scheduled tick verification.
+- Server-only Netlify credentials configured securely; deployed runtime and scheduled collection are being verified.
+
 ## 0.4.0 — 2026-11-15
 
 - Added authenticated Trading, Agent Accounts, Loan Applications, and Kalshi Markets screens; old practice and browser saves remain separate.

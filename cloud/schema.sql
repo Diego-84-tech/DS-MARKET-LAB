@@ -41,7 +41,7 @@ BEGIN
  IF p_action='commit' THEN
   IF r.lease IS DISTINCT FROM p_payload->>'lease' OR r.lease_until<=now() OR r.revision<>(p_payload->>'revision')::bigint THEN RAISE EXCEPTION 'Stale worker lease'; END IF;
   s:=p_payload->'state';
-  IF s->>'version'<>'0.4.0' OR jsonb_array_length(s->'agents')<>2 OR pg_column_size(s)>200000 THEN RAISE EXCEPTION 'Invalid state'; END IF;
+  IF s->>'version'<>'0.4.1' OR jsonb_array_length(s->'agents')<>2 OR pg_column_size(s)>200000 THEN RAISE EXCEPTION 'Invalid state'; END IF;
   UPDATE market_lab_private.runtime SET state=s,revision=revision+1,updated_at=now(),lease=CASE WHEN coalesce((p_payload->>'release')::boolean,true) THEN NULL ELSE lease END,lease_until=CASE WHEN coalesce((p_payload->>'release')::boolean,true) THEN NULL ELSE now()+interval '4 minutes' END WHERE id=true RETURNING * INTO r;
   FOR item IN SELECT value FROM jsonb_array_elements(coalesce(p_payload->'events','[]'::jsonb)) LOOP
    IF pg_column_size(item)>12000 THEN RAISE EXCEPTION 'Oversized event'; END IF;

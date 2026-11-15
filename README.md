@@ -1,4 +1,4 @@
-# DS Market Lab — 0.4.0 cloud paper experiment
+# DS Market Lab — 0.4.1 cloud paper experiment
 
 DS TECHNOLOGY™ · Real Kalshi public data, OpenAI research decisions, FAKE money only.
 
@@ -6,7 +6,7 @@ DS TECHNOLOGY™ · Real Kalshi public data, OpenAI research decisions, FAKE mon
 
 Node 24, `npm ci`, `npm run check`, `npm test`. Deploy the established Git-connected Netlify project `ds-market-lab`. A Netlify HTTP function serves `/api/lab/*`; `paper-tick` runs every minute. No always-open browser, Mac, or artificial keepalive is required. Use scheduled bounded jobs rather than a perpetual loop; each tick acquires a four-minute database lease. Worker executions can restart without duplicating funded loans or ledger changes.
 
-Version 0.4.0 supersedes the uncommitted 0.3.0 local collector and the 0.2.0 GitHub baseline. There is no delivery ZIP: a static ZIP omits the worker. The original 0.1.0 uploaded ZIP remains a historical archive. Practice fixtures retain data format 0.1.0 and their original $50 wallets, separately at `practice.html`; existing browser records are preserved.
+Version 0.4.1 supersedes the uncommitted 0.3.0 local collector and the 0.2.0 GitHub baseline. There is no delivery ZIP: a static ZIP omits the worker. The original 0.1.0 uploaded ZIP remains a historical archive. Practice fixtures retain data format 0.1.0 and their original $50 wallets, separately at `practice.html`; existing browser records are preserved.
 
 ## Four screens
 
@@ -14,7 +14,7 @@ Trading, Agent accounts, Loan applications, Kalshi markets. Sign in with the exi
 
 Agent A: $100 fake cash, BTC 15-minute markets, model review at most every five minutes. Agent B: $500 fake cash, selected BTC hourly/daily and 15-minute contracts with latest expected expiration within 30 days, review at most every 30 minutes. B's supported universe is intentionally bounded and visible, not all Kalshi markets. Each agent chooses its own name on its first API decision. Both may spend available cash including fees, reuse proceeds, submit loan applications, repay debt, hold, or skip. At most eight open positions per agent protects state size, not trade dollars. No automatic bankroll refills.
 
-Daily API budget $1 UTC, total $30 for the experiment, using `gpt-4.1-mini-2025-04-14`, input $0.40 / million tokens and output $1.60 / million. Each request reserves $0.02 BEFORE network activity; failed/unknown requests retain a conservative charge. Limits cover this app's estimates, not other projects or provider-delayed account billing. Key safety stop December 14, 2026 at 11:59 PM EST, conservatively ahead of the existing 30-day key's expiry. After the test/key deadline, public-data-only reconciliation follows remaining positions to official settlement, without model calls or new entries. A December 10 renewal reminder is configured in the Codex app. Keys never enter dist, source control, exports, or logs.
+Initial cloud verification is limited to ten minutes and $0.05; it pauses automatically. The owner must separately start the month-long phase after reviewing verification. Daily experiment API budget $1 UTC, total $30 for the experiment, using `gpt-4.1-mini-2025-04-14`, input $0.40 / million tokens and output $1.60 / million. Each request reserves $0.02 BEFORE network activity; failed/unknown requests retain a conservative charge. Limits cover this app's estimates, not other projects or provider-delayed account billing. Key safety stop December 14, 2026 at 11:59 PM EST, conservatively ahead of the existing 30-day key's expiry. After the test/key deadline, public-data-only reconciliation follows remaining positions to official settlement, without model calls or new entries. A December 10 renewal reminder is configured in the Codex app. Keys never enter dist, source control, exports, or logs.
 
 ## Bank policy
 
