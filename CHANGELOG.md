@@ -4,6 +4,8 @@
 
 - Added visible Back and Home controls, including on the sign-in screen. Back returns to the previous in-app screen; Home returns to Trading. Back never sends the user outside DS Market Lab.
 - Includes the recoverable sign-in connection fix from 0.4.2. Product name remains DS Market Lab.
+- Corrected the Netlify dashboard build command from extracting the obsolete 0.1.0 ZIP to running current checks/tests. The old extraction overwrote the deployed security headers and blocked the app's own API connection.
+- Verification: all 44 tests and syntax checks pass; deployed headers allow only the app and DS HUB connections. Safari shows Connected / Ready to sign in, enables Sign in, and Back returns from Accounts to Trading. Credential sign-in was not exercised; agents remain paused.
 
 ## 0.4.2 — 2026-11-15
 
