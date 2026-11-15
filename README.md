@@ -1,4 +1,4 @@
-# DS Market Lab — 0.5.0 cloud paper experiment
+# DS Market Lab — 0.6.0 cloud paper experiment
 
 DS TECHNOLOGY™ · Real Kalshi public data, OpenAI research decisions, FAKE money only.
 
@@ -54,3 +54,9 @@ One original agent-chosen avatar per permanent ID. Additional image applications
 
 Pausing prevents new entries and AI decisions, cancels unfilled BUY orders, and keeps existing position exits/official settlement monitoring active. This avoids stranding a position merely because new trading was paused.
 Owner adjustments are shown separately from realized trading results and never qualify as earned profit for image purchases.
+
+## 0.6.0 — decision-quality review
+Current release 0.6.0 retains the compatible 0.5.0 ledger format and marks `releaseVersion` separately. New purchases remain paused for review. Optional review research uses existing API budget/cadence and records checked proposals without BUY orders; SELL management and settlement continue for existing positions. Owner acknowledgement is necessary to resume entries; a test passing is not proof of profitable forecasting.
+Each model call receives actual recent Kalshi candle history where available, server-supplied quote facts, actual closed-trade feedback and a calibration review. Future observations are excluded from historical summaries. A probability estimate is still model-supplied and unverified. The server computes sizing, fees, break-even and estimated net value rather than trusting numerical prose. New purchases need three genuine observations and a numeric timed exit plan. Conservative quote-depth and delayed-fill rules still apply.
+`stopPrice` and `takeProfitPrice` are prices of the chosen YES/NO contract, not underlying spot dollars. Triggers cause conservative sale attempts on scheduled observations, not guaranteed fills or continuous second-by-second stops. Legacy holdings keep their original behavior; no invented retrospective stop plan is applied.
+Forecast review scores the first pre-close forecast per agent/market against non-provisional official outcomes, compares squared probability error with a neutral 50/50 reference, and retains an explicit `passed:false` because calibration alone is not a profitability test. Old forecasts are labeled by source; new strategy profitability needs prospective/out-of-sample evidence. Owner compensation never becomes an earned-profit reward.

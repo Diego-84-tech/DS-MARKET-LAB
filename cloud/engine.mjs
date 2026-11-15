@@ -1,10 +1,11 @@
 // Paper ledger only. No broker credentials or order submission endpoints exist.
-export const APP_VERSION='0.5.0';
+export const APP_VERSION='0.6.0';
+export const LEDGER_VERSION='0.5.0';
 export const POLICY_VERSION='bank-23apr-v1';
 export const MS_DAY=86400000;
 export function initialState(now=Date.now()){
  const agent=(id,start,interval)=>({id,name:null,start,cash:start,realized:0,fees:0,interestPaid:0,positions:[],loans:[],applications:[],orders:[],lastDecision:0,interval,decision:null,peak:start,maxDrawdown:0});
- return {version:APP_VERSION,policyVersion:POLICY_VERSION,createdAt:new Date(now).toISOString(),startedAt:null,endsAt:null,mode:'paused',phase:'verification',lastTick:null,error:null,agents:[agent('A',10000,300000),agent('B',50000,1800000)],bank:{capital:60000,available:60000,interestEarned:0},budget:{cap:30,dailyCap:1,spent:0,reserved:0,day:'',daySpent:0},markets:[],spot:[],notes:[],checkpoints:[],verification:{ticks:0,apiDecisions:0,archiveWrites:0},keyExpiresAt:'2026-12-14T23:59:59-05:00'};
+ return {version:LEDGER_VERSION,releaseVersion:APP_VERSION,policyVersion:POLICY_VERSION,createdAt:new Date(now).toISOString(),startedAt:null,endsAt:null,mode:'paused',phase:'verification',lastTick:null,error:null,agents:[agent('A',10000,300000),agent('B',50000,1800000)],bank:{capital:60000,available:60000,interestEarned:0},budget:{cap:30,dailyCap:1,spent:0,reserved:0,day:'',daySpent:0},markets:[],spot:[],notes:[],checkpoints:[],verification:{ticks:0,apiDecisions:0,archiveWrites:0},keyExpiresAt:'2026-12-14T23:59:59-05:00'};
 }
 export function interest(loan,now=Date.now()){return (loan.unpaidInterest||0)+Math.max(0,Math.ceil(loan.principal*loan.apr/100*Math.max(0,now-loan.accruedFrom)/MS_DAY/365-1e-8));}
 export function totals(agent,now=Date.now()){
@@ -59,34 +60,36 @@ export function entryBlock(m,agent,now){
 export const eligible=(m,agent,now)=>!entryBlock(m,agent,now);
 export function queueOrder(state,agent,d,m,now=Date.now()){
  if(!['BUY','SELL'].includes(d.action)||!m||!['YES','NO'].includes(d.side)||!Number.isFinite(d.fraction)||d.fraction<=0||d.fraction>1||!Number.isInteger(d.limit)||d.limit<1||d.limit>9999)throw Error('Invalid proposed paper order.');
+ if(d.action==='BUY'&&state.reviewRequired)throw Error('New purchases are paused for review.');
  if(agent.orders.length)throw Error('An order is already pending.');
  if(d.action==='BUY'&&entryBlock(m,agent,now))throw Error(entryBlock(m,agent,now));
  if(d.action==='BUY'&&agent.positions.length>=8)throw Error('Manage existing positions before opening more.');
  if(d.action==='SELL'&&!agent.positions.some(p=>p.market===m.ticker&&p.side===d.side))throw Error('No matching position to sell.');
- const o={id:crypto.randomUUID(),agent:agent.id,market:m.ticker,side:d.side,action:d.action,fraction:d.fraction,limit:d.limit,budget:Math.floor(agent.cash*d.fraction),createdAt:now,notBefore:now+10000,expiresAt:now+180000,reason:d.summary};agent.orders.push(o);return o;
+ const o={id:crypto.randomUUID(),agent:agent.id,market:m.ticker,side:d.side,action:d.action,fraction:d.fraction,limit:d.limit,budget:Math.floor(agent.cash*d.fraction),createdAt:now,notBefore:now+10000,expiresAt:now+180000,reason:d.summary,entryForecast:Number.isFinite(d.probability)?{probability:d.probability,at:d.at||new Date(now).toISOString(),promptVersion:d.promptVersion||null}:null,exitPlan:d.assessment?.plan||null};agent.orders.push(o);return o;
 }
 export function executeOrders(state,markets,now=Date.now()){
  const events=[],consumed=new Map();
  for(const a of state.agents){const keep=[];
-  for(const o of a.orders){const m=markets.find(m=>m.ticker===o.market);if(now<o.notBefore){keep.push(o);continue;}if(now>o.expiresAt){events.push({agent:a.id,type:'UNFILLED',detail:'Paper limit order expired',order:o.id,market:o.market,side:o.side});continue;}
+  for(const o of a.orders){if(o.action==='BUY'&&state.reviewRequired){events.push({agent:a.id,type:'UNFILLED',market:o.market,side:o.side,order:o.id,detail:'New purchases are paused for review.'});continue;}const m=markets.find(m=>m.ticker===o.market);if(now<o.notBefore){keep.push(o);continue;}if(now>o.expiresAt){events.push({agent:a.id,type:'UNFILLED',detail:'Paper limit order expired',order:o.id,market:o.market,side:o.side});continue;}
    const q=quoteFor(m,o.side,o.action),fresh=m&&now-Date.parse(m.receivedAt)<=20000;
    if(!q||!fresh||m.quotes.crossed||m.status!=='active'||Date.parse(m.close_time)<=now||m.feeVerified!==true){keep.push(o);continue;}
    const valid=o.action==='BUY'?q.price<=o.limit:q.price>=o.limit;if(!valid){keep.push(o);continue;}
    // Use only 10% of displayed best-level depth; two agents share that allowance.
-   const key=m.ticker+o.side+o.action,depth=Math.max(0,Math.floor(q.quantity/100*.1)-(consumed.get(key)||0));let quantity=0,gross=0,costFee=0,pnl=null;
+   const key=m.ticker+o.side+o.action,depth=Math.max(0,Math.floor(q.quantity/100*.1)-(consumed.get(key)||0));let quantity=0,gross=0,costFee=0,pnl=null,entryForecast=null,openedAt=null;
    if(o.action==='BUY'){
+    if(o.exitPlan&&(now>=o.exitPlan.exitAt||q.price<=o.exitPlan.stopPrice)){events.push({agent:a.id,type:'UNFILLED',market:o.market,side:o.side,order:o.id,detail:'Entry cancelled: its time exit or loss-price invalidation was reached before fill.'});continue;}
     if(!eligible(m,a,now)){events.push({agent:a.id,type:'UNFILLED',detail:'Entry window or settlement horizon ended',order:o.id,market:o.market,side:o.side});continue;}
     const budget=Math.min(a.cash,o.budget);quantity=Math.min(depth,Math.floor(budget*100/q.price));while(quantity>0&&Math.ceil(quantity*q.price/100)+fee(quantity,q.price,m.multiplier)>budget)quantity--;
     if(!quantity){keep.push(o);continue;}gross=Math.ceil(quantity*q.price/100);costFee=fee(quantity,q.price,m.multiplier);a.cash-=gross+costFee;a.fees+=costFee;
-    const p=a.positions.find(p=>p.market===o.market&&p.side===o.side);if(p){p.quantity+=quantity;p.cost+=gross+costFee;}else a.positions.push({market:o.market,side:o.side,quantity,cost:gross+costFee,mark:Math.floor(quantity*q.price/100),openedAt:now,close_time:m.close_time,expiration_time:m.latest_expiration_time||m.expiration_time||null,deadline:now+30*MS_DAY});
+    const p=a.positions.find(p=>p.market===o.market&&p.side===o.side);if(p){p.quantity+=quantity;p.cost+=gross+costFee;if(o.exitPlan)p.exitPlan=p.exitPlan?{stopPrice:Math.max(p.exitPlan.stopPrice,o.exitPlan.stopPrice),takeProfitPrice:Math.min(p.exitPlan.takeProfitPrice,o.exitPlan.takeProfitPrice),exitAt:Math.min(p.exitPlan.exitAt,o.exitPlan.exitAt)}:o.exitPlan;}else a.positions.push({market:o.market,side:o.side,quantity,cost:gross+costFee,mark:Math.floor(quantity*q.price/100),openedAt:now,close_time:m.close_time,expiration_time:m.latest_expiration_time||m.expiration_time||null,deadline:now+30*MS_DAY,entryForecast:o.entryForecast,exitPlan:o.exitPlan});
    }else{
     const p=a.positions.find(p=>p.market===o.market&&p.side===o.side);if(!p)continue;quantity=Math.min(depth,p.quantity,Math.max(1,Math.floor(p.quantity*o.fraction)));if(!quantity){keep.push(o);continue;}
-    gross=Math.floor(quantity*q.price/100);costFee=fee(quantity,q.price,m.multiplier);if(gross<costFee){keep.push(o);continue;}const basis=quantity===p.quantity?p.cost:Math.ceil(p.cost*quantity/p.quantity);a.cash+=gross-costFee;pnl=gross-costFee-basis;a.realized+=pnl;a.fees+=costFee;p.quantity-=quantity;p.cost-=basis;if(!p.quantity)a.positions=a.positions.filter(x=>x!==p);
+    entryForecast=p.entryForecast||null;openedAt=p.openedAt;gross=Math.floor(quantity*q.price/100);costFee=fee(quantity,q.price,m.multiplier);if(gross<costFee){keep.push(o);continue;}const basis=quantity===p.quantity?p.cost:Math.ceil(p.cost*quantity/p.quantity);a.cash+=gross-costFee;pnl=gross-costFee-basis;a.realized+=pnl;a.fees+=costFee;p.quantity-=quantity;p.cost-=basis;if(!p.quantity)a.positions=a.positions.filter(x=>x!==p);
    }
-   consumed.set(key,(consumed.get(key)||0)+quantity);events.push({agent:a.id,type:o.action,market:o.market,side:o.side,quantity,price:q.price,fee:costFee,pnl,gross,cash:a.cash,at:new Date(now).toISOString(),reason:o.reason,order:o.id,assumption:'Delayed, conservative top-depth taker paper fill; not a real fill'});
+   consumed.set(key,(consumed.get(key)||0)+quantity);events.push({agent:a.id,type:o.action,market:o.market,side:o.side,quantity,price:q.price,fee:costFee,pnl,gross,entryForecast,openedAt,cash:a.cash,at:new Date(now).toISOString(),reason:o.reason,order:o.id,assumption:'Delayed, conservative top-depth taker paper fill; not a real fill'});
   }a.orders=keep;
   for(const p of [...a.positions]){const m=markets.find(x=>x.ticker===p.market);if(!m){p.markStale=true;continue;}
-   if(['settled','finalized'].includes(m.status)&&['yes','no'].includes(m.result)&&m.is_provisional!==true&&Number.isFinite(Date.parse(m.settlement_ts))){const paid=p.side.toLowerCase()===m.result?p.quantity*100:0;a.cash+=paid;a.realized+=paid-p.cost;a.positions=a.positions.filter(x=>x!==p);events.push({agent:a.id,type:'SETTLE',market:p.market,side:p.side,quantity:p.quantity,at:new Date(now).toISOString(),result:m.result,payout:paid,pnl:paid-p.cost});continue;}
+   if(['settled','finalized'].includes(m.status)&&['yes','no'].includes(m.result)&&m.is_provisional!==true&&Number.isFinite(Date.parse(m.settlement_ts))){const paid=p.side.toLowerCase()===m.result?p.quantity*100:0;a.cash+=paid;a.realized+=paid-p.cost;a.positions=a.positions.filter(x=>x!==p);events.push({agent:a.id,type:'SETTLE',market:p.market,side:p.side,quantity:p.quantity,at:new Date(now).toISOString(),result:m.result,payout:paid,pnl:paid-p.cost,entryForecast:p.entryForecast||null,openedAt:p.openedAt});continue;}
    const q=quoteFor(m,p.side,'SELL');p.markStale=!q||now-Date.parse(m.receivedAt)>20000||m.quotes?.crossed||m.status!=='active';if(!p.markStale)p.mark=Math.max(0,Math.floor(p.quantity*q.price/100)-fee(p.quantity,q.price,m.multiplier));
   }
   const t=totals(a,now);a.peak=Math.max(a.peak,t.net);a.maxDrawdown=Math.max(a.maxDrawdown,a.peak-t.net);
@@ -98,5 +101,5 @@ export function reserveBudget(state,now=Date.now()){
 }
 export function finishBudget(state,usage){const b=state.budget;const charge=usage?Math.max(0,(usage.input_tokens||0)*.4/1e6+(usage.output_tokens||0)*1.6/1e6):.02;b.reserved=Math.max(0,b.reserved-.02);b.spent+=charge;b.daySpent=Math.max(0,b.daySpent-.02+charge);}
 
-export function shouldMonitor(state){return ['running','settling'].includes(state.mode)||(state.mode==='paused'&&state.agents.some(a=>a.positions.length));}
+export function shouldMonitor(state){return ['running','settling'].includes(state.mode)||(state.mode==='paused'&&(state.reviewResearch===true||state.agents.some(a=>a.positions.length)));}
 export function pauseEntries(state){state.mode='paused';for(const a of state.agents)a.orders=a.orders.filter(o=>o.action==='SELL');}

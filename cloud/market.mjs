@@ -1,7 +1,7 @@
 import {quotes} from '../runner/kalshi.mjs';
 const HOST='https://external-api.kalshi.com/trade-api/v2';
 export async function publicGet(path){
- if(!/^\/(markets(?:[/?])|historical\/markets\/[A-Z0-9-]+|series\/[A-Z0-9-]+(?:[/?]|$))/.test(path))throw Error('Public market path rejected');
+ if(!/^\/(markets(?:[/?])|historical\/markets\/[A-Z0-9._-]+|series\/[A-Z0-9-]+(?:[/?]|$))/.test(path))throw Error('Public market path rejected');
  const r=await fetch(HOST+path,{method:'GET',redirect:'error',signal:AbortSignal.timeout(8000),headers:{Accept:'application/json'}});if(!r.ok)throw Error('Kalshi public data unavailable ('+r.status+')');return {data:await r.json(),receivedAt:new Date().toISOString()};
 }
 export async function collect(state,now=Date.now()){
@@ -34,4 +34,4 @@ export async function collect(state,now=Date.now()){
  return out;
 }
 export async function spot(){const r=await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot',{signal:AbortSignal.timeout(5000)});if(!r.ok)throw Error('Spot reference unavailable');const d=await r.json(),price=Number(d.data?.amount);if(!Number.isFinite(price)||price<=0)throw Error('Invalid spot reference');return {price,receivedAt:new Date().toISOString(),source:'Coinbase spot reference; not Kalshi settlement feed'};}
-export function compactMarket(m){return {ticker:m.ticker,title:m.title,subtitle:m.subtitle,yes_sub_title:m.yes_sub_title,no_sub_title:m.no_sub_title,series:m.series,status:m.status,open_time:m.open_time,close_time:m.close_time,expiration_time:m.expiration_time,latest_expiration_time:m.latest_expiration_time,floor_strike:m.floor_strike,cap_strike:m.cap_strike,rules_primary:String(m.rules_primary||'').slice(0,5000),rules_secondary:String(m.rules_secondary||'').slice(0,2000),result:m.result,settlement_ts:m.settlement_ts,is_provisional:m.is_provisional,quotes:m.quotes,receivedAt:m.receivedAt,exchangeQuoteTime:null,feeVerified:m.feeVerified,multiplier:m.multiplier};}
+export function compactMarket(m){return {ticker:m.ticker,title:m.title,subtitle:m.subtitle,yes_sub_title:m.yes_sub_title,no_sub_title:m.no_sub_title,series:m.series,status:m.status,open_time:m.open_time,close_time:m.close_time,expiration_time:m.expiration_time,expected_expiration_time:m.expected_expiration_time,latest_expiration_time:m.latest_expiration_time,floor_strike:m.floor_strike,cap_strike:m.cap_strike,rules_primary:String(m.rules_primary||'').slice(0,5000),rules_secondary:String(m.rules_secondary||'').slice(0,2000),result:m.result,settlement_ts:m.settlement_ts,is_provisional:m.is_provisional,quotes:m.quotes,receivedAt:m.receivedAt,exchangeQuoteTime:null,feeVerified:m.feeVerified,multiplier:m.multiplier};}

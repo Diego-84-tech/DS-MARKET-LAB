@@ -1,5 +1,15 @@
 # Release notes
 
+## 0.6.0 — 2026-11-15
+
+- Paused new entries for an owner-approved decision-quality review while preserving existing holdings and monitoring. Review research can record proposals without purchases; resumption requires an explicit owner acknowledgement.
+- Fixed decimal-strike ticker validation, including Beta's KXBTCD-26NOV1517-T64749.99, without permitting traversal or arbitrary URLs. Separated trading close, expected settlement and latest possible settlement.
+- Added real recent contract candle history to research, bounded closed-trade feedback, and independent fee-inclusive break-even/expected-value calculations. Unsupported forecasts remain explicitly unverified.
+- New entry proposals require numeric loss-price, profit-price and time exits. Server monitoring checks these independently of model cadence; fills remain delayed and cannot be guaranteed. Invalidated entries are cancelled before fill.
+- Added a first-forecast-per-agent/market historical calibration review with verified outcomes and explicit insufficient-evidence labels. No automatic profitability claim or automatic restart.
+- Separated lifetime trading result, owner compensation, and results after the approved compensation baseline. No balances, portraits, permanent IDs or historical trades reset.
+
+
 ## 0.5.0 — 2026-11-15
 
 - Owner compensation credited $29.07 to AlphaBot for the reported interruption, restoring $100 available. Original settlement retained; adjustment is not trading profit. Paused accounts with open positions continue conservative exits and settlement monitoring.

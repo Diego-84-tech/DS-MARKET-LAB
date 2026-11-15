@@ -9,7 +9,9 @@ Use integer cents for money and hundredths of a contract for quantities. Keep ra
 
 Strategy Lab uses user-authored deterministic rules only. Its evaluations and replay sessions are separate from the original recorded wallet history. Saved strategy versions are immutable; copy to a draft to change them. History ranges show only available reached frames. Never stitch separate expiring contract price lines together as one continuous instrument. Version 0.2.0 adds editable sources to Diego-84-tech/DS-MARKET-LAB; netlify.toml builds/tests dist directly and supersedes the old ZIP extraction command. Preserve the original uploaded ZIP as an archive, not the active source.
 
-## Authorized cloud experiment 0.5.0
+## Authorized cloud experiment 0.6.0
 The cloud ledger supersedes legacy fixture balances: Agent A $100, Agent B $500, no per-trade cap beyond available cash including fees. Fake-money bank $600 with human approval, 23/28/33 percent ANNUAL simple interest and $100/$500 outstanding principal ceilings. Legacy fictional practice remains unchanged. DS HUB project lfgmvycxqinoriamprhr and Netlify ds-market-lab are authorized targets for this task; do not modify other app records. API key was provisioned securely; never include it in source or output.
 
 Release 0.5.0: permanent IDs AlphaBot/Beta; display names 15-minute Trader/Flexible Horizon. Beta may choose across discovered Kalshi categories, not only BTC. Image requests after the initial free picture require owner approval and $5 of available realized profit net of fees/interest; image API reservation cap $1 separate from trading. Preserve all existing records, paused/running status and balances on upgrade.
+
+0.6.0 review: no automatic resumption of purchases. Preserve owner-approved maintenance pause, allow separately labeled shadow research within existing budgets, monitor existing positions, never represent a model probability or a calibration score as proven profit. Compatible ledger format remains 0.5.0; releaseVersion is 0.6.0.

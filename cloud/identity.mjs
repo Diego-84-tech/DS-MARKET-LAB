@@ -1,7 +1,7 @@
 export const identity=id=>id==='A'?{appId:'AlphaBot',name:'15-minute Trader',color:'#438cff'}:{appId:'Beta',name:'Flexible Horizon',color:'#b18aff'};
 export const IMAGE_PRICE=500;
 export function upgrade(state){
- state.version='0.5.0';state.imageBudget ||= {cap:1,reserved:0,spent:0};
+ state.version='0.5.0';state.releaseVersion='0.6.0';state.imageBudget ||= {cap:1,reserved:0,spent:0};
  for(const a of state.agents){Object.assign(a,{appId:identity(a.id).appId,displayName:identity(a.id).name});a.imageRequests ||= [];a.images ||= [];a.cosmeticSpent ||= 0;
   if(!a.imageRequests.length&&!a.images.length)a.imageRequests.push({id:crypto.randomUUID(),status:'approved',free:true,price:0,createdAt:new Date().toISOString()});
  }
@@ -9,7 +9,7 @@ export function upgrade(state){
 }
 export function imageAllowance(a,now=Date.now()){
  const interest=a.loans.reduce((n,l)=>n+(l.unpaidInterest||0)+Math.ceil(l.principal*l.apr/100*Math.max(0,now-l.accruedFrom)/86400000/365),0);
- return Math.max(0,Math.min(a.cash,a.realized-a.interestPaid-interest-(a.cosmeticSpent||0)));
+ const b=a.performanceBaseline||{realized:0,interestPaid:0,cosmeticSpent:0};return Math.max(0,Math.min(a.cash,(a.realized-b.realized)-(a.interestPaid-b.interestPaid)-interest-((a.cosmeticSpent||0)-(b.cosmeticSpent||0))));
 }
 export function requestImage(a,prompt,reason,now=Date.now()){
  if(a.imageRequests.some(r=>['pending','approved','generating'].includes(r.status)))throw Error('A profile picture request is already open.');

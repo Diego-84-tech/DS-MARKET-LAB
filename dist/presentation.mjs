@@ -8,3 +8,5 @@ export function chartData(frames,events){
  for(const m of markers){if(m.type==='BUY')entries.set(m.agent,m);else {const entry=entries.get(m.agent);if(entry&&Number.isFinite(m.pnl))connections.push({entry,exit:m,pnl:m.pnl});if(m.type==='SETTLE')entries.delete(m.agent);}}
  return {points,markers,connections};
 }
+
+export function performance(agent){const b=agent.performanceBaseline;return {lifetime:agent.realized-agent.interestPaid,sinceReview:b?(agent.realized-b.realized)-(agent.interestPaid-b.interestPaid):agent.realized-agent.interestPaid,baselineAt:b?.at||null,ownerCredits:agent.ownerCredits||0};}
