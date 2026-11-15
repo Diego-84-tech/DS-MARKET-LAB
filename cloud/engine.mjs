@@ -1,5 +1,5 @@
 // Paper ledger only. No broker credentials or order submission endpoints exist.
-export const APP_VERSION='0.4.1';
+export const APP_VERSION='0.4.2';
 export const POLICY_VERSION='bank-23apr-v1';
 export const MS_DAY=86400000;
 export function initialState(now=Date.now()){

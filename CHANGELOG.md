@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.4.2 — 2026-11-15
+
+- Fixed a failed first connection permanently disabling Sign in. Startup now retries three times with a timeout, shows accurate connection status, and offers Retry connection after failure. Reconnecting or returning to the page can recover without losing entered credentials.
+- Added release-specific frontend URLs to refresh stale assets. Product name remains DS Market Lab; Glass Lab is only the selected icon concept label, not a rename.
+- Preserved accounts, paper balances, loans, API budgets and experiment state.
+
 ## 0.4.1 — 2026-11-15
 
 - Bounded initial cloud verification to ten minutes, with a $0.05 API ceiling and no automatic transition into the month-long experiment.
