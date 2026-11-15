@@ -2,11 +2,13 @@
 
 ## 0.5.0 — 2026-11-15
 
+- Owner compensation credited $29.07 to AlphaBot for the reported interruption, restoring $100 available. Original settlement retained; adjustment is not trading profit. Paused accounts with open positions continue conservative exits and settlement monitoring.
+
 - Added Home, Recorded Tickers, Agent Trading, Profiles, Requests and Settings with black/charcoal styling and persistent navigation. Polls stage updates instead of replacing reading content.
 - Preserved permanent AlphaBot/Beta IDs and introduced the agreed display names; Beta can choose short or longer horizons across discovered categories.
 - Added owner-protected market recording/candle history, replay, exact-market links, buy/sell markers, CSV-free JSON export and explicit missing-history labels.
 - Added separate approval applications for $5 fake-profit picture purchases, one free agent-chosen picture per ID, private saved images and a $1 API image reservation cap.
-- Improved exact blocked-entry reasons and recorded decision market snapshots; retained delayed fill, fee, cash and settlement checks. Existing balances/history and owner pause preserved.
+- Improved exact blocked-entry reasons and recorded decision market snapshots; retained delayed fill, fee, cash and settlement checks. Existing balances/history and owner control state preserved.
 
 
 ## 0.4.3 — 2026-11-15

@@ -68,14 +68,14 @@ export function queueOrder(state,agent,d,m,now=Date.now()){
 export function executeOrders(state,markets,now=Date.now()){
  const events=[],consumed=new Map();
  for(const a of state.agents){const keep=[];
-  for(const o of a.orders){const m=markets.find(m=>m.ticker===o.market);if(now<o.notBefore){keep.push(o);continue;}if(now>o.expiresAt){events.push({agent:a.id,type:'UNFILLED',detail:'Paper limit order expired',order:o.id});continue;}
+  for(const o of a.orders){const m=markets.find(m=>m.ticker===o.market);if(now<o.notBefore){keep.push(o);continue;}if(now>o.expiresAt){events.push({agent:a.id,type:'UNFILLED',detail:'Paper limit order expired',order:o.id,market:o.market,side:o.side});continue;}
    const q=quoteFor(m,o.side,o.action),fresh=m&&now-Date.parse(m.receivedAt)<=20000;
    if(!q||!fresh||m.quotes.crossed||m.status!=='active'||Date.parse(m.close_time)<=now||m.feeVerified!==true){keep.push(o);continue;}
    const valid=o.action==='BUY'?q.price<=o.limit:q.price>=o.limit;if(!valid){keep.push(o);continue;}
    // Use only 10% of displayed best-level depth; two agents share that allowance.
    const key=m.ticker+o.side+o.action,depth=Math.max(0,Math.floor(q.quantity/100*.1)-(consumed.get(key)||0));let quantity=0,gross=0,costFee=0,pnl=null;
    if(o.action==='BUY'){
-    if(!eligible(m,a,now)){events.push({agent:a.id,type:'UNFILLED',detail:'Entry window or settlement horizon ended',order:o.id});continue;}
+    if(!eligible(m,a,now)){events.push({agent:a.id,type:'UNFILLED',detail:'Entry window or settlement horizon ended',order:o.id,market:o.market,side:o.side});continue;}
     const budget=Math.min(a.cash,o.budget);quantity=Math.min(depth,Math.floor(budget*100/q.price));while(quantity>0&&Math.ceil(quantity*q.price/100)+fee(quantity,q.price,m.multiplier)>budget)quantity--;
     if(!quantity){keep.push(o);continue;}gross=Math.ceil(quantity*q.price/100);costFee=fee(quantity,q.price,m.multiplier);a.cash-=gross+costFee;a.fees+=costFee;
     const p=a.positions.find(p=>p.market===o.market&&p.side===o.side);if(p){p.quantity+=quantity;p.cost+=gross+costFee;}else a.positions.push({market:o.market,side:o.side,quantity,cost:gross+costFee,mark:Math.floor(quantity*q.price/100),openedAt:now,close_time:m.close_time,expiration_time:m.latest_expiration_time||m.expiration_time||null,deadline:now+30*MS_DAY});
@@ -86,7 +86,7 @@ export function executeOrders(state,markets,now=Date.now()){
    consumed.set(key,(consumed.get(key)||0)+quantity);events.push({agent:a.id,type:o.action,market:o.market,side:o.side,quantity,price:q.price,fee:costFee,pnl,gross,cash:a.cash,at:new Date(now).toISOString(),reason:o.reason,order:o.id,assumption:'Delayed, conservative top-depth taker paper fill; not a real fill'});
   }a.orders=keep;
   for(const p of [...a.positions]){const m=markets.find(x=>x.ticker===p.market);if(!m){p.markStale=true;continue;}
-   if(['settled','finalized'].includes(m.status)&&['yes','no'].includes(m.result)&&m.is_provisional!==true&&Number.isFinite(Date.parse(m.settlement_ts))){const paid=p.side.toLowerCase()===m.result?p.quantity*100:0;a.cash+=paid;a.realized+=paid-p.cost;a.positions=a.positions.filter(x=>x!==p);events.push({agent:a.id,type:'SETTLE',market:p.market,result:m.result,payout:paid,pnl:paid-p.cost});continue;}
+   if(['settled','finalized'].includes(m.status)&&['yes','no'].includes(m.result)&&m.is_provisional!==true&&Number.isFinite(Date.parse(m.settlement_ts))){const paid=p.side.toLowerCase()===m.result?p.quantity*100:0;a.cash+=paid;a.realized+=paid-p.cost;a.positions=a.positions.filter(x=>x!==p);events.push({agent:a.id,type:'SETTLE',market:p.market,side:p.side,quantity:p.quantity,at:new Date(now).toISOString(),result:m.result,payout:paid,pnl:paid-p.cost});continue;}
    const q=quoteFor(m,p.side,'SELL');p.markStale=!q||now-Date.parse(m.receivedAt)>20000||m.quotes?.crossed||m.status!=='active';if(!p.markStale)p.mark=Math.max(0,Math.floor(p.quantity*q.price/100)-fee(p.quantity,q.price,m.multiplier));
   }
   const t=totals(a,now);a.peak=Math.max(a.peak,t.net);a.maxDrawdown=Math.max(a.maxDrawdown,a.peak-t.net);
@@ -97,3 +97,6 @@ export function reserveBudget(state,now=Date.now()){
  const reservation=.02;if(b.spent+b.reserved+reservation>b.cap||b.daySpent+reservation>b.dailyCap)return false;b.reserved+=reservation;b.daySpent+=reservation;return true;
 }
 export function finishBudget(state,usage){const b=state.budget;const charge=usage?Math.max(0,(usage.input_tokens||0)*.4/1e6+(usage.output_tokens||0)*1.6/1e6):.02;b.reserved=Math.max(0,b.reserved-.02);b.spent+=charge;b.daySpent=Math.max(0,b.daySpent-.02+charge);}
+
+export function shouldMonitor(state){return ['running','settling'].includes(state.mode)||(state.mode==='paused'&&state.agents.some(a=>a.positions.length));}
+export function pauseEntries(state){state.mode='paused';for(const a of state.agents)a.orders=a.orders.filter(o=>o.action==='SELL');}

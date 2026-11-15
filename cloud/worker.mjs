@@ -5,14 +5,14 @@ import {getStore} from '@netlify/blobs';
 import {gateway} from './store.mjs';
 import {collect,spot,compactMarket,publicGet} from './market.mjs';
 import {decide} from './agents.mjs';
-import {executeOrders,queueOrder,applyLoan,repay,reserveBudget,finishBudget,totals,MS_DAY} from './engine.mjs';
+import {executeOrders,queueOrder,applyLoan,repay,reserveBudget,finishBudget,totals,MS_DAY,shouldMonitor,pauseEntries} from './engine.mjs';
 export async function runTick({archive=true}={}){
  if(!process.env.MARKET_LAB_WORKER_SECRET||!process.env.OPENAI_API_KEY)throw Error('Cloud credentials are not configured');
  const lock=await gateway('lease');if(lock.busy)return {status:'busy'};let revision=lock.revision;const state=upgrade(lock.state),events=[];let recordings=[];
  const commit=async(release=true,snapshot=null)=>{const r=await gateway('commit',{state,lease:lock.lease,revision,events:events.splice(0),recordings:recordings.splice(0),release,...(snapshot?{snapshot}:{})});revision=r.revision;};
  try{
-  if(!['running','settling'].includes(state.mode)){await commit();return {status:state.mode};}
-  const now=Date.now();
+  if(!shouldMonitor(state)){await commit();return {status:state.mode};}
+  const now=Date.now();if(state.mode==='paused')for(const a of state.agents)a.orders=a.orders.filter(o=>o.action==='SELL');
   if(state.phase==='verification'&&(!Number.isFinite(Date.parse(state.verificationEndsAt))||now>=Date.parse(state.verificationEndsAt))){state.mode='paused';state.error='Ten-minute cloud verification ended. Owner review required before the 30-day experiment.';await commit();return {status:'verification-ended'};}
   if(now>=Date.parse(state.endsAt)||now>=Date.parse(state.keyExpiresAt)){state.mode='settling';state.error='Test window or key safety deadline reached. No new entries or model calls; following existing positions to official outcomes.';for(const a of state.agents)a.orders=a.orders.filter(o=>o.action==='SELL');}
   if(lock.databaseBytes>460*1024*1024){state.mode='paused';state.error='DS HUB storage guard: database is above 460 MiB. No new market records or API calls.';await commit();return {status:'storage-paused'};}
@@ -55,7 +55,7 @@ export async function control(jwt,action,payload={}){
  await gateway('read',{},jwt);const lock=await gateway('lease');if(lock.busy)throw Error('Worker is busy. Try again shortly.');const s=upgrade(lock.state);let event;
  try{
   if(action==='start'){const now=Date.now();if(s.phase==='verification'){if(s.verification.ticks<2)throw Error('Cloud verification must complete first.');s.phase='experiment';s.budget.cap=30;s.budget.dailyCap=1;s.verificationEndsAt=null;}if(!s.startedAt){s.startedAt=new Date(now).toISOString();s.endsAt=new Date(now+30*MS_DAY).toISOString();}if(now>=Date.parse(s.endsAt))throw Error('Experiment ended. Preserve records and review before a new experiment.');s.mode='running';s.error=null;event={type:'START',detail:'Owner enabled paper test'};}
-  else if(action==='pause'){s.mode='paused';event={type:'PAUSE',detail:'Owner paused paper test'};}
+  else if(action==='pause'){pauseEntries(s);event={type:'PAUSE',detail:'Owner paused paper test'};}
   else if(action==='loan'){const a=approve(s,payload);event={type:'LOAN_REVIEW',application:a};}
   else if(action==='image-review'){const a=s.agents.find(a=>a.id===payload.agent);if(!a)throw Error('Unknown agent');const application=reviewImage(a,payload.id,payload.approve===true);event={type:'IMAGE_REVIEW',agent:a.id,application};}
   else throw Error('Unknown control');
