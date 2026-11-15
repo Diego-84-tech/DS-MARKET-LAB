@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.4.3 — 2026-11-15
+
+- Added visible Back and Home controls, including on the sign-in screen. Back returns to the previous in-app screen; Home returns to Trading. Back never sends the user outside DS Market Lab.
+- Includes the recoverable sign-in connection fix from 0.4.2. Product name remains DS Market Lab.
+
 ## 0.4.2 — 2026-11-15
 
 - Fixed a failed first connection permanently disabling Sign in. Startup now retries three times with a timeout, shows accurate connection status, and offers Retry connection after failure. Reconnecting or returning to the page can recover without losing entered credentials.

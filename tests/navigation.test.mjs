@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {createNavigation} from '../dist/navigation.mjs';
+test('Back follows visited app screens and stops at Home',()=>{const n=createNavigation('trading');assert.equal(n.canBack,false);n.visit('accounts');n.visit('bank');assert.equal(n.back(),'accounts');assert.equal(n.back(),'trading');assert.equal(n.canBack,false);assert.equal(n.back(),'trading');});
+test('direct entry can return Home without leaving the app',()=>{const n=createNavigation('markets');assert.equal(n.canBack,true);assert.equal(n.back(),'trading');assert.equal(n.canBack,false);});
+test('unknown screens and duplicate navigation cannot create external destinations',()=>{const n=createNavigation('trading');n.visit('trading');assert.equal(n.canBack,false);n.visit('https://example.invalid');assert.equal(n.canBack,false);n.visit('accounts');n.visit('accounts');assert.equal(n.back(),'trading');});

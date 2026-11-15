@@ -1,4 +1,4 @@
-# DS Market Lab — 0.4.2 cloud paper experiment
+# DS Market Lab — 0.4.3 cloud paper experiment
 
 DS TECHNOLOGY™ · Real Kalshi public data, OpenAI research decisions, FAKE money only.
 
@@ -43,3 +43,5 @@ Runtime state is capped at 200 KB; recent charts retain seven days. Financial/de
 `npm run check && npm test` includes 41 tests: original accounting/strategy/observer tests plus cloud lending, approval idempotency, interest/partial repayment, debt tiers, delayed/shared-depth fills, settlement rollover, and budget reservations. Live public Kalshi series/book and Coinbase reference were checked during implementation; authorization failures are explicitly rejected. Three automatic cloud ticks, compressed archive readback and actual model responses were verified; the short verification was then paused. The month-long experiment is not started. See VERIFICATION-0.4.1.md.
 
 Release 0.4.2 adds recoverable sign-in startup. Existing cloud session records retain compatible 0.4.1 ledger format; their balances and state are not rewritten for a frontend fix.
+
+Release 0.4.3 adds persistent Back and Home controls. Back stays within the app and Home returns to Trading.
