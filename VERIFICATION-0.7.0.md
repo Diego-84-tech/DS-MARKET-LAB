@@ -10,3 +10,5 @@
 - 78 tests and syntax checks pass, covering badge qualification, proportional starting-capital targets, fees/interest/picture costs, duplicate events, partial closes, genuine plan flags, reward isolation, all existing entry/review safeguards and retained execution events after a transient commit failure.
 - A read-only localhost preview using saved paper records showed both preserved portraits and IDs, level/XP summaries and all six achievement cards. The 390px phone viewport showed no horizontal overflow. No production controls were clicked during UI verification.
 - Supabase ledger updates remained confined to DS Market Lab. No schema migration, cash top-up, new loan or extra image generation was required.
+
+The 0.7.0 badge-aware prompt is versioned paper-research-v4, inheriting the v3 evidence/entry checks. Previously observed v3 decisions remain tagged with their original provenance.
