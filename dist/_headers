@@ -3,3 +3,5 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://lfgmvycxqinoriamprhr.supabase.co; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'self'
+/manifest.webmanifest
+  Content-Type: application/manifest+json

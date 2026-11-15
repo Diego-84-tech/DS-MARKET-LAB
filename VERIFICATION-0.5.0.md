@@ -15,3 +15,4 @@
 - App icon: selected #8 Glass Lab direction rendered as a standalone icon using built-in image generation; original prompt: “single square app icon matching number 8, luminous glass flask with three rising turquoise bars on a dark background, no labels.” Source and 180/192/512px packaging live under dist/icons. App name and Home Screen name are DS Market Lab; release version remains visible inside app and metadata.
 
 Final private portrait rendering uses authenticated fetches and in-memory data URLs, compatible with the existing strict image policy; no blob-image CSP expansion is needed. Static asset URLs include a final release cache suffix.
+Both final profile images were rendered and loaded successfully in the local browser using authenticated-style fetches of the saved WebP assets. A render/fetch race found during QA was corrected by sharing image-load promises across repeated renders.
