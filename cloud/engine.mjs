@@ -1,5 +1,5 @@
 // Paper ledger only. No broker credentials or order submission endpoints exist.
-export const APP_VERSION='0.7.0';
+export const APP_VERSION='0.8.0';
 export const LEDGER_VERSION='0.5.0';
 export const POLICY_VERSION='bank-23apr-v1';
 export const MS_DAY=86400000;
@@ -60,6 +60,7 @@ export function entryBlock(m,agent,now){
 export const eligible=(m,agent,now)=>!entryBlock(m,agent,now);
 export function queueOrder(state,agent,d,m,now=Date.now()){
  if(!['BUY','SELL'].includes(d.action)||!m||!['YES','NO'].includes(d.side)||!Number.isFinite(d.fraction)||d.fraction<=0||d.fraction>1||!Number.isInteger(d.limit)||d.limit<1||d.limit>9999)throw Error('Invalid proposed paper order.');
+ if(d.action==='BUY'&&agent.lifecycle&&agent.lifecycle!=='active')throw Error('Agent is retiring or onboarding; new purchases are blocked.');
  if(d.action==='BUY'&&state.reviewRequired)throw Error('New purchases are paused for review.');
  if(agent.orders.length)throw Error('An order is already pending.');
  if(d.action==='BUY'&&entryBlock(m,agent,now))throw Error(entryBlock(m,agent,now));
@@ -70,7 +71,7 @@ export function queueOrder(state,agent,d,m,now=Date.now()){
 export function executeOrders(state,markets,now=Date.now()){
  const events=[],consumed=new Map();
  for(const a of state.agents){const keep=[];
-  for(const o of a.orders){if(o.action==='BUY'&&state.reviewRequired){events.push({agent:a.id,type:'UNFILLED',market:o.market,side:o.side,order:o.id,detail:'New purchases are paused for review.'});continue;}const m=markets.find(m=>m.ticker===o.market);if(now<o.notBefore){keep.push(o);continue;}if(now>o.expiresAt){events.push({agent:a.id,type:'UNFILLED',detail:'Paper limit order expired',order:o.id,market:o.market,side:o.side});continue;}
+  for(const o of a.orders){if(o.action==='BUY'&&(state.reviewRequired||(a.lifecycle&&a.lifecycle!=='active'))){events.push({agent:a.id,type:'UNFILLED',market:o.market,side:o.side,order:o.id,detail:'New purchases are paused for review.'});continue;}const m=markets.find(m=>m.ticker===o.market);if(now<o.notBefore){keep.push(o);continue;}if(now>o.expiresAt){events.push({agent:a.id,type:'UNFILLED',detail:'Paper limit order expired',order:o.id,market:o.market,side:o.side});continue;}
    const q=quoteFor(m,o.side,o.action),fresh=m&&now-Date.parse(m.receivedAt)<=20000;
    if(!q||!fresh||m.quotes.crossed||m.status!=='active'||Date.parse(m.close_time)<=now||m.feeVerified!==true){keep.push(o);continue;}
    const valid=o.action==='BUY'?q.price<=o.limit:q.price>=o.limit;if(!valid){keep.push(o);continue;}

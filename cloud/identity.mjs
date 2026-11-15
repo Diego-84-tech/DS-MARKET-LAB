@@ -2,8 +2,8 @@ import {achievementState} from '../dist/achievements.mjs';
 export const identity=id=>id==='A'?{appId:'AlphaBot',name:'15-minute Trader',color:'#438cff'}:{appId:'Beta',name:'Flexible Horizon',color:'#b18aff'};
 export const IMAGE_PRICE=500;
 export function upgrade(state){
- state.version='0.5.0';state.releaseVersion='0.7.0';state.imageBudget ||= {cap:1,reserved:0,spent:0};
- for(const a of state.agents){achievementState(a);Object.assign(a,{appId:identity(a.id).appId,displayName:identity(a.id).name});a.imageRequests ||= [];a.images ||= [];a.cosmeticSpent ||= 0;
+ state.version='0.5.0';state.releaseVersion='0.8.0';state.imageBudget ||= {cap:1,reserved:0,spent:0};
+ for(const a of state.agents){achievementState(a);a.appId=identity(a.id).appId;a.role ||= identity(a.id).name;if(!a.needsIdentity)a.displayName ||= identity(a.id).name;a.runId ||= crypto.randomUUID();a.runNumber ||= 1;a.runStartedAt ||= state.createdAt||new Date().toISOString();a.lifecycle ||= 'active';a.imageRequests ||= [];a.images ||= [];a.cosmeticSpent ||= 0;
   if(!a.imageRequests.length&&!a.images.length)a.imageRequests.push({id:crypto.randomUUID(),status:'approved',free:true,price:0,createdAt:new Date().toISOString()});
  }
  return state;

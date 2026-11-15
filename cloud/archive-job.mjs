@@ -1,0 +1,40 @@
+import {createHash} from 'node:crypto';
+import {getStore} from '@netlify/blobs';
+import {archiveGateway} from './store.mjs';
+import {freshReplacement} from './replacement.mjs';
+const text=new TextEncoder(),hash=b=>createHash('sha256').update(b).digest('hex');
+const bytes=v=>typeof v==='string'?text.encode(v):v instanceof Uint8Array?v:new Uint8Array(v);
+export async function runArchiveJob({services={},maxSteps=30}={}){
+ const call=services.call||archiveGateway,store=services.store||getStore({name:'market-lab-agent-archives',consistency:'strong'}),pictures=services.pictures||getStore({name:'market-lab-avatars',consistency:'strong'});
+ await call('begin');const job=await call('claim');if(job.idle)return {status:'idle'};
+ if(job.status==='verified')return {status:'activation',...(await call('activate',{id:job.id,lease:job.lease,agent:freshReplacement(job.snapshot,job.id)}))};
+ const root=(job.summary.appId||job.snapshot.agent.id)+'/'+job.snapshot.agent.runId+'/',cp=Object.keys(job.checkpoint||{}).length?job.checkpoint:{phase:'events',entries:[],pages:[],count:0,totalBytes:0,sequence:0,eventAfter:0,marketAfter:'',markets:[],marketIndex:0,frameAfterAt:null,frameAfterSource:'',snapshotAfter:null,pictureIndex:0,eventCount:0,frameCount:0,snapshotCount:0,stats:{buys:0,closes:0,wins:0,losses:0,inputTokens:0,outputTokens:0,models:[]},rounds:{},verifyPage:0,verifiedFiles:0,verifiedBytes:0};
+ const get=async key=>{const b=await store.get(root+key,{type:'arrayBuffer'});if(b===null)throw Error('Missing archive file '+key);return bytes(b);};
+ const immutable=async(key,b)=>{b=bytes(b);if(b.length>3500000)throw Error('Archive file too large');const existing=await store.get(root+key,{type:'arrayBuffer'});if(existing!==null){if(hash(bytes(existing))!==hash(b))throw Error('Immutable archive file mismatch: '+key);}else await store.set(root+key,b);return {path:key,sha256:hash(b),bytes:b.length};};
+ const flush=async()=>{if(!cp.entries.length)return;const key='manifest-'+String(cp.pages.length).padStart(4,'0')+'.json',b=JSON.stringify({files:cp.entries});cp.pages.push(await immutable(key,b));cp.entries=[];};
+ const add=async(path,data,kind)=>{const descriptor=await immutable(path,typeof data==='string'||data instanceof Uint8Array?data:JSON.stringify(data));const page=cp.pages.length;cp.entries.push({...descriptor,kind});cp.count++;cp.totalBytes+=descriptor.bytes;if(cp.entries.length>=200)await flush();return {path,page};};
+ const chunk=async(rows,prefix,kind)=>{let group=[],size=0;for(const row of rows){const line=JSON.stringify(row)+'\n',n=text.encode(line).length;if(size+n>1000000&&group.length){await add(prefix+String(cp.sequence++).padStart(6,'0')+'.ndjson',group.join(''),kind);group=[];size=0;}group.push(line);size+=n;}if(group.length)await add(prefix+String(cp.sequence++).padStart(6,'0')+'.ndjson',group.join(''),kind);};
+ const source=async(kind,p={})=>(await call('source',{id:job.id,kind,...p})).rows;
+ const save=()=>call('progress',{id:job.id,lease:job.lease,checkpoint:cp});
+ for(let step=0;step<maxSteps;step++){
+  if(cp.phase==='events'){
+   const rows=await source('events',{after:cp.eventAfter});await chunk(rows,'events/','events');cp.eventCount+=rows.length;for(const e of rows){if(e.type==='BUY')cp.stats.buys++;if(Number.isFinite(e.pnl)&&(e.type==='SETTLE'||e.positionClosed===true)){cp.stats.closes++;if(e.pnl>0)cp.stats.wins++;if(e.pnl<0)cp.stats.losses++;}if(e.usage){cp.stats.inputTokens+=e.usage.input_tokens||0;cp.stats.outputTokens+=e.usage.output_tokens||0;}if(e.decision?.model&&!cp.stats.models.includes(e.decision.model))cp.stats.models.push(e.decision.model);}
+   if(rows.length)cp.eventAfter=rows.at(-1).recordId;if(rows.length<250)cp.phase='markets';
+  }else if(cp.phase==='markets'){
+   const rows=await source('markets',{after:cp.marketAfter});for(const m of rows){cp.markets.push(m.ticker);await add('recordings/'+encodeURIComponent(m.ticker)+'/market.json',m,'market');}if(rows.length)cp.marketAfter=rows.at(-1).ticker;if(rows.length<250)cp.phase='frames';
+  }else if(cp.phase==='frames'){
+   const ticker=cp.markets[cp.marketIndex];if(!ticker){cp.phase='snapshots';await save();continue;}
+   const rows=await source('frames',{ticker,afterAt:cp.frameAfterAt,afterSource:cp.frameAfterSource});await chunk(rows,'recordings/'+encodeURIComponent(ticker)+'/frames-','frames');cp.frameCount+=rows.length;if(rows.length){cp.frameAfterAt=rows.at(-1).at;cp.frameAfterSource=rows.at(-1).source;}if(rows.length<1000){cp.marketIndex++;cp.frameAfterAt=null;cp.frameAfterSource='';}
+  }else if(cp.phase==='snapshots'){
+   const rows=await source('snapshots',{after:cp.snapshotAfter});await chunk(rows,'account-history/','snapshots');cp.snapshotCount+=rows.length;if(rows.length)cp.snapshotAfter=rows.at(-1).minute;if(rows.length<500)cp.phase='pictures';
+  }else if(cp.phase==='pictures'){
+   const image=job.snapshot.agent.images?.[cp.pictureIndex];if(image){const b=await pictures.get(image.key,{type:'arrayBuffer'});if(b===null)throw Error('Original profile picture missing; replacement remains blocked.');const file='pictures/'+String(cp.pictureIndex+1).padStart(3,'0')+'.webp',entry=await add(file,bytes(b),'picture');if(image.id===job.snapshot.agent.avatarId)cp.preview=entry;cp.pictureIndex++;}
+   else{await add('agent.json',job.snapshot,'agent');await add('pictures/index.json',(job.snapshot.agent.images||[]).map((im,i)=>({...im,file:'pictures/'+String(i+1).padStart(3,'0')+'.webp'})),'picture-index');await add('results.json',{...job.summary,statistics:cp.stats,statisticsNote:'Counts of recorded closing events, not a whole-position win rate; partial closes and legacy gaps can differ from complete trade counts.',apiUsageEstimate:cp.stats.inputTokens*.4/1e6+cp.stats.outputTokens*1.6/1e6,apiCostNote:'Estimate from recorded successful research requests; unknown failed-call costs may be additional.',records:{events:cp.eventCount,frames:cp.frameCount,snapshots:cp.snapshotCount,markets:cp.markets.length}},'results');await add('lessons.json',{verifiedLessons:[],unverifiedHypotheses:job.snapshot.notes||[],note:'No model-written hypothesis is automatically treated as reviewed knowledge.'},'lessons');await add('README.txt','DS Market Lab agent archive\nPrivate read-only archive of saved agent-specific records.\nAgent: '+job.summary.name+'\nPermanent ID: '+job.summary.appId+'\nRun: '+job.snapshot.agent.runId+'\nFrozen at: '+job.frozenAt+'\nFinancial records include paper trades, not real orders. Original records are retained. Missing observations were never fabricated. API keys, login sessions and unrelated app data are excluded.\n','readme');await flush();cp.phase='verify';}
+  }else if(cp.phase==='verify'){
+   const page=cp.pages[cp.verifyPage];if(page){const b=await get(page.path);if(hash(b)!==page.sha256)throw Error('Manifest verification failed');const files=JSON.parse(new TextDecoder().decode(b)).files;const stop=Math.min(files.length,(cp.verifyEntry||0)+20);for(const f of files.slice(cp.verifyEntry||0,stop)){const content=await get(f.path);if(content.length!==f.bytes||hash(content)!==f.sha256)throw Error('Archive verification failed for '+f.path);cp.verifiedFiles++;cp.verifiedBytes+=content.length;}cp.verifyEntry=stop;if(stop===files.length){cp.verifyPage++;cp.verifyEntry=0;}}
+   else{if(cp.verifiedFiles!==cp.count||cp.verifiedBytes!==cp.totalBytes)throw Error('Archive inventory mismatch');const index={format:'ds-market-lab-agent-archive',version:1,id:job.id,root,verified:true,frozenAt:job.frozenAt,totalFiles:cp.count,totalBytes:cp.totalBytes,pages:cp.pages,preview:cp.preview||null,sourceCounts:{events:cp.eventCount,frames:cp.frameCount,snapshots:cp.snapshotCount,markets:cp.markets.length},statistics:cp.stats};const descriptor=await immutable('index.json',JSON.stringify(index));await call('verify',{id:job.id,lease:job.lease,manifest:{...index,indexHash:descriptor.sha256}});return {status:'verified',...(await call('activate',{id:job.id,lease:job.lease,agent:freshReplacement(job.snapshot,job.id)}))};}
+  }
+  await save();
+ }
+ return {status:'building',id:job.id,phase:cp.phase};
+}

@@ -1,3 +1,6 @@
+import {nightlyReview} from './nightly-review.mjs';
+import {PROMPT_VERSION} from './agents.mjs';
+import {requestReplacement,settleRetiring} from './replacement.mjs';
 import {updateAchievements} from '../dist/achievements.mjs';
 import {resumeBlock} from '../dist/review.mjs';
 import {researchMarkets,decisionCheck,exitTrigger,reviewForecasts} from './research.mjs';
@@ -15,6 +18,7 @@ export async function runTick({archive=true,services={}}={}){
  const lock=await io.gateway('lease');if(lock.busy)return {status:'busy'};let revision=lock.revision;const state=upgrade(lock.state),events=[];let recordings=[];
  const commit=async(release=true,snapshot=null)=>{events.push(...updateAchievements(state,events));const batch=events.slice(),savedRecordings=recordings.slice();const r=await io.gateway('commit',{state,lease:lock.lease,revision,events:batch,recordings:savedRecordings,release,...(snapshot?{snapshot}:{})});revision=r.revision;events.splice(0,batch.length);recordings.splice(0,savedRecordings.length);};
  try{
+  if(state.agentRulesVersion!==PROMPT_VERSION){state.agentRulesVersion=PROMPT_VERSION;state.rules={promptVersion:PROMPT_VERSION,objective:'Net profit after fees and interest; no chasing losses; HOLD is permitted.',roles:{AlphaBot:'BTC 15-minute only',Beta:'Any supplied Kalshi market, horizon up to 30 days'},incentives:'Cosmetic server-verified badges only; extra pictures require owner approval and earned paper profit.',replacement:'Owner confirmation; obligations resolved and immutable archive verified before new run. Other agent continues.',nightlyReview:'9 PM America/New_York; owner review, no automatic funding or penalties.',budgets:{dailyResearch:state.budget.dailyCap,totalResearch:state.budget.cap,image:state.imageBudget.cap}};events.push({type:'RULES_UPDATED',detail:'Net profit after fees and interest; no loss chasing; cosmetic badges only; owner-approved replacement after verified archive; nightly 9 PM Eastern review does not automatically change cash.',promptVersion:PROMPT_VERSION});}
   if(!shouldMonitor(state)){await commit();return {status:state.mode};}
   const now=Date.now();if(state.mode==='paused')for(const a of state.agents)a.orders=a.orders.filter(o=>o.action==='SELL');
   if(state.phase==='verification'&&(!Number.isFinite(Date.parse(state.verificationEndsAt))||now>=Date.parse(state.verificationEndsAt))){state.mode='paused';state.error='Ten-minute cloud verification ended. Owner review required before the 30-day experiment.';await commit();return {status:'verification-ended'};}
@@ -35,10 +39,11 @@ export async function runTick({archive=true,services={}}={}){
   for(const a of state.agents){for(const p of a.positions){const m=markets.find(x=>x.ticker===p.market);const trigger=exitTrigger(p,m,Date.now());if(!a.orders.length&&trigger){const q=m.quotes?.[p.side==='YES'?'yesBid':'noBid'];if(q?.price>0)queueOrder(state,a,{action:'SELL',side:p.side,fraction:1,limit:1,automaticExit:true,summary:trigger+'; conservative paper exit attempted, fill not guaranteed'},m,now);}}
    if(a.loans.some(l=>l.dueAt<=now)&&a.cash>0){const paid=repay(state,a,a.cash,now);if(paid)events.push({agent:a.id,type:'REPAY',amount:paid,detail:'Due-date repayment from available cash'});}
   }
+  settleRetiring(state,events,now);
   // Persist execution and reserve each API call BEFORE sending it. Unknown costs remain charged.
   await commit(false);
   for(const a of state.agents){
-   if((state.mode!=='running'&&!state.reviewResearch)||Date.now()-a.lastDecision<a.interval||!markets.length||a.orders.length)continue;
+   if(a.lifecycle!=='active'||(state.mode!=='running'&&!state.reviewResearch)||Date.now()-a.lastDecision<a.interval||!markets.length||a.orders.length)continue;
    if(!reserveBudget(state,Date.now())){a.status='API budget reached; no model call';continue;}
    a.lastDecision=Date.now();await commit(false);
    try{const research=await io.researchMarkets(markets.filter(m=>a.id==='B'||m.series==='KXBTC15M'));const output=await io.decide(state,a,research);finishBudget(state,output.usage);a.name ||= output.decision.name;const d=output.decision;a.decision=d;a.status=d.action;state.verification.apiDecisions++;events.push({agent:a.id,type:'DECISION',market:d.market,marketSnapshot:(()=>{const m=markets.find(m=>m.ticker===d.market);return m?{ticker:m.ticker,title:m.title,receivedAt:m.receivedAt,close_time:m.close_time,quotes:m.quotes,feeVerified:m.feeVerified,multiplier:m.multiplier,floor_strike:m.floor_strike}:null;})(),decision:d,usage:output.usage,responseId:output.responseId});
@@ -58,6 +63,7 @@ export async function runTick({archive=true,services={}}={}){
    await commit(false);
   }
   state.lastTick=new Date().toISOString();if(state.mode==='running')state.error=null;state.verification.ticks++;
+  const nightly=nightlyReview(state,now);if(nightly)events.push(nightly);
   const elapsed=now-Date.parse(state.startedAt);for(const day of [10,20,30])if(elapsed>=day*MS_DAY&&!state.checkpoints.some(x=>x.day===day)){const report={day,at:state.lastTick,accounts:state.agents.map(a=>({id:a.id,...totals(a)}))};state.checkpoints.push(report);events.push({type:'REVIEW',report});}
   if(state.mode==='settling'&&state.agents.every(a=>!a.positions.length&&!a.orders.length))state.mode='completed';
   await commit(true,{at:state.lastTick,accounts:state.agents.map(a=>({id:a.id,...totals(a)}))});return {status:'ok',ticks:state.verification.ticks,decisions:state.verification.apiDecisions};
@@ -68,6 +74,8 @@ export async function control(jwt,action,payload={}){
  await gateway('read',{},jwt);const lock=await gateway('lease');if(lock.busy)throw Error('Worker is busy. Try again shortly.');const s=upgrade(structuredClone(lock.state));let event;
  try{
   if(action==='start'){const blocked=resumeBlock(s,payload.reviewAcknowledged);if(blocked)throw Error(blocked);const now=Date.now();if(s.phase==='verification'){if(s.verification.ticks<2)throw Error('Cloud verification must complete first.');s.phase='experiment';s.budget.cap=30;s.budget.dailyCap=1;s.verificationEndsAt=null;}if(!s.startedAt){s.startedAt=new Date(now).toISOString();s.endsAt=new Date(now+30*MS_DAY).toISOString();}if(now>=Date.parse(s.endsAt))throw Error('Experiment ended. Preserve records and review before a new experiment.');s.reviewRequired=false;s.reviewResearch=false;s.mode='running';s.error=null;event={type:'START',detail:'Owner enabled paper test'};}
+  else if(action==='replace-agent'){const replacement=requestReplacement(s,payload);event={type:'REPLACEMENT_REQUEST',agent:payload.agent,runId:payload.expectedRunId,replacement,detail:'Owner confirmed replacement. Existing obligations must finish before archiving.'};}
+  else if(action==='retry-identity'){const a=s.agents.find(a=>a.id===payload.agent);if(!a||a.lifecycle!=='onboarding')throw Error('No onboarding pending');const r=a.imageRequests.find(r=>r.free&&r.status==='failed');if(!r)throw Error('No failed initial picture');r.status='approved';event={type:'IDENTITY_RETRY',agent:a.id};}
   else if(action==='pause'){pauseEntries(s);s.reviewResearch=false;event={type:'PAUSE',detail:'Owner paused paper test'};}
   else if(action==='review'){pauseEntries(s);s.reviewRequired=true;s.reviewResearch=true;event={type:'REVIEW_RESEARCH',detail:'Owner enabled research-only proposals; new purchases remain blocked.'};}
   else if(action==='loan'){const a=approve(s,payload);event={type:'LOAN_REVIEW',application:a};}

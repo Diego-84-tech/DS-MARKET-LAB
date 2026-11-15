@@ -1,3 +1,5 @@
+import {readArchiveFile} from '../../cloud/archive-read.mjs';
+import {archiveGateway} from '../../cloud/store.mjs';
 import {validTicker} from '../../dist/market-id.mjs';
 import {getStore} from '@netlify/blobs';
 import {gateway,SUPABASE_URL,PUBLIC_KEY} from '../../cloud/store.mjs';
@@ -7,9 +9,11 @@ export default async function handler(req){
  const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
  try{
   const path=new URL(req.url).pathname.replace('/.netlify/functions/lab','/api/lab');
-  if(path==='/api/lab/config'&&req.method==='GET')return Response.json({url:SUPABASE_URL,key:PUBLIC_KEY,version:'0.7.0',workerConfigured:!!(process.env.OPENAI_API_KEY&&process.env.MARKET_LAB_WORKER_SECRET)},{headers});
+  if(path==='/api/lab/config'&&req.method==='GET')return Response.json({url:SUPABASE_URL,key:PUBLIC_KEY,version:'0.8.0',workerConfigured:!!(process.env.OPENAI_API_KEY&&process.env.MARKET_LAB_WORKER_SECRET)},{headers});
   const bearer=req.headers.get('authorization')||'';if(!bearer.startsWith('Bearer '))return Response.json({error:'Sign in with your DS HUB owner account.'},{status:401,headers});
   const jwt=bearer.slice(7);if(req.method==='GET'&&path==='/api/lab/history')return Response.json(await gateway('history',{after:Number(new URL(req.url).searchParams.get('after')||0)},jwt),{headers});if(req.method==='GET'&&path==='/api/lab/state')return Response.json(await gateway('read',{},jwt),{headers});
+  if(req.method==='GET'&&path==='/api/lab/archives')return Response.json(await archiveGateway('list',{},jwt),{headers});
+  if(req.method==='GET'&&['/api/lab/archive','/api/lab/archive-file'].includes(path)){const params=new URL(req.url).searchParams,detail=await archiveGateway('detail',{id:params.get('id')},jwt);if(path==='/api/lab/archive')return Response.json(detail,{headers});return readArchiveFile(detail,Number(params.get('page')),params.get('path'));}
   if(req.method==='GET'&&path==='/api/lab/recordings')return Response.json(await gateway('recordings',{},jwt),{headers});
   if(req.method==='GET'&&path==='/api/lab/recording'){const ticker=new URL(req.url).searchParams.get('ticker');if(!validTicker(ticker))throw Error('Invalid ticker');return Response.json(await gateway('recording',{ticker},jwt),{headers});}
   if(req.method==='GET'&&path==='/api/lab/avatar'){const d=await gateway('read',{},jwt),id=new URL(req.url).searchParams.get('id');const image=d.state.agents.flatMap(a=>a.images||[]).find(i=>i.id===id);if(!image)return new Response(null,{status:404,headers});const bytes=await getStore({name:'market-lab-avatars',consistency:'strong'}).get(image.key,{type:'arrayBuffer'});return new Response(bytes,{headers:{...headers,'Content-Type':'image/webp'}});}

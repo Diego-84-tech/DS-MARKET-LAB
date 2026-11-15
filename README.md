@@ -1,4 +1,4 @@
-# DS Market Lab — 0.7.0 cloud paper experiment
+# DS Market Lab — 0.8.0 cloud paper experiment
 
 DS TECHNOLOGY™ · Real Kalshi public data, OpenAI research decisions, FAKE money only.
 
@@ -65,3 +65,18 @@ Forecast review scores the first pre-close forecast per agent/market against non
 The owner explicitly requested full fake-money trading again. Resume retains balances, positions, all existing gates and the $1/day/$30 research caps. Cosmetic XP/levels and six achievements appear in profiles, with summaries on Home and goals included in agent context. No money, borrowing, API access, automatic image generation or risk allowance is awarded.
 Badges are Evidence First (checked history on three distinct markets), First Net Win (a complete position profitable after fees), Plan Keeper (three complete server-plan exits including loss exits), Five Percent (realized qualifying earnings at least 5% of initial bankroll), Steady Earner (three wins among five complete closes with positive net earnings), and Profitable Finish (completed experiment, positive earnings and no obligations). Open losses reduce qualifying earnings; open gains, loans and owner credits never qualify. Stale marks block account-earnings badges.
 Position-based statistics start with positions opened after feature activation, rather than reconstructing unknown past partial fills. Partial exits aggregate into one position result. Duplicate events cannot repeat awards; cosmetic awards remain as dated historical achievements if later performance declines. Server-checked research can earn evidence credit without placing a trade. The prompt explicitly rejects badge-chasing, revenge trading, unnecessary borrowing and taking larger risks for achievements.
+
+
+## 0.8.0 — per-agent archives, confirmation and nightly review
+
+- Profiles → **Replace agent…** opens a confirmation dialog and does nothing until confirmed. Only the selected profile stops opening new investments. Existing exits and settlement remain monitored. Unpaid debt blocks replacement; it is never erased or transferred.
+- A private cloud archive freezes the selected run's account, pictures, achievements, hypotheses, full paged events, market observations and account snapshots. Every stored file is hashed and read back before activation. Source records remain intact. Only then is a fresh run created with separately recorded initial capital; the other agent and global experiment budget/clock remain unchanged.
+- AlphaBot and Beta remain permanent IDs. Current names/pictures remain. A future replacement chooses a name and its initial picture in the existing budgeted onboarding process. A failed picture can be retried by the owner within the same global image cap. No extra picture was generated to test this feature.
+- Profiles → **Saved agent archives** lists each profile's past runs. Archived records and original portrait are read-only. Complete download includes all manifest pages; browser ZIP export is bounded to 50 MiB. Larger archives remain saved but need a future server export. Quick file preview shows selected first-page files. Recorded closing-event counts are not a full-position win rate.
+- **Keep me signed in** is opt-in on that browser/device. It stores this app's renewable session, never the password. Sign out clears this app's stored session and requests a local Supabase session logout. Browser privacy settings or server session policy can still require sign-in.
+- Each monitored day at/after **9 PM America/New_York**, a ledger review is saved once under Profiles. It costs no extra AI call and makes no cash adjustment. It is a saved report, not a phone notification. A paused experiment without open positions receives its review on the next monitored tick; nightly report creation does not override the key stop or storage safeguards.
+- Agent guidance **paper-research-v5** states net profit after costs, no loss-chasing, cosmetic rewards, owner-only replacement, and no promised automatic funding. Evidence/fee/exit checks and HOLD remain valid. No profitability is promised.
+
+Required backend: apply `supabase/migrations/20261115194135_market_lab_agent_archives.sql` only to authorized DS HUB `lfgmvycxqinoriamprhr`, then release the Netlify functions and frontend together. Private tables keep RLS and no direct anonymous/authenticated table grants. Owner read and worker writes use checked RPC functions. No reset or replacement is part of deployment verification.
+
+The 2026-11-15 nightly report is labeled interrupted and excluded from full-day comparison because the owner reported a roughly six-hour interruption. Its financial records remain intact; 2026-11-16 is the first eligible full-day review.
