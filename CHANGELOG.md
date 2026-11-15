@@ -1,5 +1,12 @@
 # Release notes
 
+## 0.7.0 — 2026-11-15
+
+- Resumed full fake-money trading at explicit owner request, preserving accounts and existing research, entry and exit safeguards.
+- Added six server-awarded cosmetic badges, XP, levels and profile progress. Agent context includes goals with explicit anti-badge-chasing instructions.
+- Aggregates partial exits into complete-position results; filters duplicate events, pre-activation positions, open gains, borrowed cash and owner credits. Loss exits can earn plan-following credit.
+- No extra funds, API budget, image calls or borrowing rights granted.
+
 ## 0.6.0 — 2026-11-15
 
 - Paused new entries for an owner-approved decision-quality review while preserving existing holdings and monitoring. Review research can record proposals without purchases; resumption requires an explicit owner acknowledgement.

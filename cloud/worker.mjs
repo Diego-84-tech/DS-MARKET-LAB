@@ -1,3 +1,4 @@
+import {updateAchievements} from '../dist/achievements.mjs';
 import {resumeBlock} from '../dist/review.mjs';
 import {researchMarkets,decisionCheck,exitTrigger,reviewForecasts} from './research.mjs';
 import {upgrade,requestImage,reviewImage} from './identity.mjs';
@@ -12,7 +13,7 @@ export async function runTick({archive=true,services={}}={}){
  const io={gateway,collect,spot,decide,researchMarkets,recordMarkets,publicGet,...services};
  if(!services.gateway&&(!process.env.MARKET_LAB_WORKER_SECRET||!process.env.OPENAI_API_KEY))throw Error('Cloud credentials are not configured');
  const lock=await io.gateway('lease');if(lock.busy)return {status:'busy'};let revision=lock.revision;const state=upgrade(lock.state),events=[];let recordings=[];
- const commit=async(release=true,snapshot=null)=>{const r=await io.gateway('commit',{state,lease:lock.lease,revision,events:events.splice(0),recordings:recordings.splice(0),release,...(snapshot?{snapshot}:{})});revision=r.revision;};
+ const commit=async(release=true,snapshot=null)=>{events.push(...updateAchievements(state,events));const batch=events.slice(),savedRecordings=recordings.slice();const r=await io.gateway('commit',{state,lease:lock.lease,revision,events:batch,recordings:savedRecordings,release,...(snapshot?{snapshot}:{})});revision=r.revision;events.splice(0,batch.length);recordings.splice(0,savedRecordings.length);};
  try{
   if(!shouldMonitor(state)){await commit();return {status:state.mode};}
   const now=Date.now();if(state.mode==='paused')for(const a of state.agents)a.orders=a.orders.filter(o=>o.action==='SELL');
@@ -31,7 +32,7 @@ export async function runTick({archive=true,services={}}={}){
   for(const t of unresolved.slice(0,4)){try{const {data}=await io.publicGet('/markets/'+encodeURIComponent(t));if(['settled','finalized'].includes(data.market?.status)&&data.market.is_provisional!==true)state.reviewOutcomes.push({ticker:t,status:data.market.status,result:data.market.result,is_provisional:data.market.is_provisional,settlement_ts:data.market.settlement_ts,close_time:data.market.close_time});}catch{}}
   state.reviewOutcomes=state.reviewOutcomes.slice(-60);state.forecastReview=reviewForecasts(state.reviewForecasts,state.reviewOutcomes);state.forecastReview.observations=state.forecastReview.observations.slice(-60);
   // Attempt near-close liquidation each tick; an unfilled attempt remains open until official settlement.
-  for(const a of state.agents){for(const p of a.positions){const m=markets.find(x=>x.ticker===p.market);const trigger=exitTrigger(p,m,Date.now());if(!a.orders.length&&trigger){const q=m.quotes?.[p.side==='YES'?'yesBid':'noBid'];if(q?.price>0)queueOrder(state,a,{action:'SELL',side:p.side,fraction:1,limit:1,summary:trigger+'; conservative paper exit attempted, fill not guaranteed'},m,now);}}
+  for(const a of state.agents){for(const p of a.positions){const m=markets.find(x=>x.ticker===p.market);const trigger=exitTrigger(p,m,Date.now());if(!a.orders.length&&trigger){const q=m.quotes?.[p.side==='YES'?'yesBid':'noBid'];if(q?.price>0)queueOrder(state,a,{action:'SELL',side:p.side,fraction:1,limit:1,automaticExit:true,summary:trigger+'; conservative paper exit attempted, fill not guaranteed'},m,now);}}
    if(a.loans.some(l=>l.dueAt<=now)&&a.cash>0){const paid=repay(state,a,a.cash,now);if(paid)events.push({agent:a.id,type:'REPAY',amount:paid,detail:'Due-date repayment from available cash'});}
   }
   // Persist execution and reserve each API call BEFORE sending it. Unknown costs remain charged.
@@ -43,7 +44,7 @@ export async function runTick({archive=true,services={}}={}){
    try{const research=await io.researchMarkets(markets.filter(m=>a.id==='B'||m.series==='KXBTC15M'));const output=await io.decide(state,a,research);finishBudget(state,output.usage);a.name ||= output.decision.name;const d=output.decision;a.decision=d;a.status=d.action;state.verification.apiDecisions++;events.push({agent:a.id,type:'DECISION',market:d.market,marketSnapshot:(()=>{const m=markets.find(m=>m.ticker===d.market);return m?{ticker:m.ticker,title:m.title,receivedAt:m.receivedAt,close_time:m.close_time,quotes:m.quotes,feeVerified:m.feeVerified,multiplier:m.multiplier,floor_strike:m.floor_strike}:null;})(),decision:d,usage:output.usage,responseId:output.responseId});
     const m=research.find(x=>x.ticker===d.market);if(d.market&&m&&Number.isFinite(d.probability)&&!state.reviewForecasts.some(x=>x.agent===a.id&&x.decision.market===d.market)){state.reviewForecasts.push({agent:a.id,at:d.at,decision:{market:d.market,probability:d.probability,at:d.at,action:d.action,promptVersion:d.promptVersion}});state.reviewForecasts=state.reviewForecasts.slice(-60);}
     const assessment=decisionCheck(a,d,m,Date.now());a.decision.assessment=assessment;
-    events.push({agent:a.id,type:'ASSESSMENT',market:d.market,assessment,history:m?.history||null});
+    events.push({agent:a.id,type:'ASSESSMENT',checked:true,market:d.market,assessment,history:m?.history||null});
     if(d.action==='BUY'||d.action==='SELL'){
      if(d.action==='BUY'&&state.reviewRequired){a.status='Review only · purchase not placed';events.push({agent:a.id,type:'SHADOW_PROPOSAL',market:d.market,detail:'New purchases remain paused. This checked proposal is recorded for review, not execution.',assessment});}
      else {
