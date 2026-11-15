@@ -8,18 +8,19 @@ import {gateway} from './store.mjs';
 import {collect,spot,compactMarket,publicGet} from './market.mjs';
 import {decide} from './agents.mjs';
 import {executeOrders,queueOrder,applyLoan,repay,reserveBudget,finishBudget,totals,MS_DAY,shouldMonitor,pauseEntries} from './engine.mjs';
-export async function runTick({archive=true}={}){
- if(!process.env.MARKET_LAB_WORKER_SECRET||!process.env.OPENAI_API_KEY)throw Error('Cloud credentials are not configured');
- const lock=await gateway('lease');if(lock.busy)return {status:'busy'};let revision=lock.revision;const state=upgrade(lock.state),events=[];let recordings=[];
- const commit=async(release=true,snapshot=null)=>{const r=await gateway('commit',{state,lease:lock.lease,revision,events:events.splice(0),recordings:recordings.splice(0),release,...(snapshot?{snapshot}:{})});revision=r.revision;};
+export async function runTick({archive=true,services={}}={}){
+ const io={gateway,collect,spot,decide,researchMarkets,recordMarkets,publicGet,...services};
+ if(!services.gateway&&(!process.env.MARKET_LAB_WORKER_SECRET||!process.env.OPENAI_API_KEY))throw Error('Cloud credentials are not configured');
+ const lock=await io.gateway('lease');if(lock.busy)return {status:'busy'};let revision=lock.revision;const state=upgrade(lock.state),events=[];let recordings=[];
+ const commit=async(release=true,snapshot=null)=>{const r=await io.gateway('commit',{state,lease:lock.lease,revision,events:events.splice(0),recordings:recordings.splice(0),release,...(snapshot?{snapshot}:{})});revision=r.revision;};
  try{
   if(!shouldMonitor(state)){await commit();return {status:state.mode};}
   const now=Date.now();if(state.mode==='paused')for(const a of state.agents)a.orders=a.orders.filter(o=>o.action==='SELL');
   if(state.phase==='verification'&&(!Number.isFinite(Date.parse(state.verificationEndsAt))||now>=Date.parse(state.verificationEndsAt))){state.mode='paused';state.error='Ten-minute cloud verification ended. Owner review required before the 30-day experiment.';await commit();return {status:'verification-ended'};}
   if(now>=Date.parse(state.endsAt)||now>=Date.parse(state.keyExpiresAt)){state.mode='settling';state.error='Test window or key safety deadline reached. No new entries or model calls; following existing positions to official outcomes.';for(const a of state.agents)a.orders=a.orders.filter(o=>o.action==='SELL');}
   if(lock.databaseBytes>460*1024*1024){state.mode='paused';state.error='DS HUB storage guard: database is above 460 MiB. No new market records or API calls.';await commit();return {status:'storage-paused'};}
-  const raw=await collect(state,now);state.markets=raw.map(compactMarket);const markets=state.markets;recordings=await recordMarkets(state,markets,now);
-  try{state.spot.push(await spot());state.spot=state.spot.slice(-60);}catch{state.spot=state.spot.filter(x=>now-Date.parse(x.receivedAt)<3600000);}
+  const raw=await io.collect(state,now);state.markets=raw.map(compactMarket);const markets=state.markets;recordings=await io.recordMarkets(state,markets,now);
+  try{state.spot.push(await io.spot());state.spot=state.spot.slice(-60);}catch{state.spot=state.spot.filter(x=>now-Date.parse(x.receivedAt)<3600000);}
   if(archive){const store=getStore({name:'market-lab-recordings',consistency:'strong'});const key=new Date().toISOString().slice(0,16).replace(/[:T]/g,'-')+'.json.gz';await store.set(key,new Blob([gzipSync(JSON.stringify({source:'kalshi-public-rest',at:new Date().toISOString(),markets:raw,spot:state.spot.at(-1)}))]),{metadata:{expiresAt:new Date(now+30*MS_DAY).toISOString()}});state.verification.archiveWrites++;
    if(!state.lastArchiveCleanup||now-state.lastArchiveCleanup>MS_DAY){const listing=await store.list();for(const blob of listing.blobs||[]){const d=Date.parse(blob.key.slice(0,10));if(Number.isFinite(d)&&d<now-30*MS_DAY)await store.delete(blob.key);}state.lastArchiveCleanup=now;}
   }
@@ -27,7 +28,7 @@ export async function runTick({archive=true}={}){
   for(const e of fills.filter(e=>['SELL','SETTLE'].includes(e.type))){const a=state.agents.find(a=>a.id===e.agent);a.closedTrades||=[];a.closedTrades.push({market:e.market,at:e.at||new Date().toISOString(),type:e.type,pnl:e.pnl,reason:e.reason||'Official settlement',entryForecast:e.entryForecast||null});a.closedTrades=a.closedTrades.slice(-12);}
   state.reviewForecasts||=[];
   const unresolved=[...new Set(state.reviewForecasts.map(e=>e.decision.market))].filter(t=>!state.reviewOutcomes?.some(m=>m.ticker===t));state.reviewOutcomes||=[];
-  for(const t of unresolved.slice(0,4)){try{const {data}=await publicGet('/markets/'+encodeURIComponent(t));if(['settled','finalized'].includes(data.market?.status)&&data.market.is_provisional!==true)state.reviewOutcomes.push({ticker:t,status:data.market.status,result:data.market.result,is_provisional:data.market.is_provisional,settlement_ts:data.market.settlement_ts,close_time:data.market.close_time});}catch{}}
+  for(const t of unresolved.slice(0,4)){try{const {data}=await io.publicGet('/markets/'+encodeURIComponent(t));if(['settled','finalized'].includes(data.market?.status)&&data.market.is_provisional!==true)state.reviewOutcomes.push({ticker:t,status:data.market.status,result:data.market.result,is_provisional:data.market.is_provisional,settlement_ts:data.market.settlement_ts,close_time:data.market.close_time});}catch{}}
   state.reviewOutcomes=state.reviewOutcomes.slice(-60);state.forecastReview=reviewForecasts(state.reviewForecasts,state.reviewOutcomes);state.forecastReview.observations=state.forecastReview.observations.slice(-60);
   // Attempt near-close liquidation each tick; an unfilled attempt remains open until official settlement.
   for(const a of state.agents){for(const p of a.positions){const m=markets.find(x=>x.ticker===p.market);const trigger=exitTrigger(p,m,Date.now());if(!a.orders.length&&trigger){const q=m.quotes?.[p.side==='YES'?'yesBid':'noBid'];if(q?.price>0)queueOrder(state,a,{action:'SELL',side:p.side,fraction:1,limit:1,summary:trigger+'; conservative paper exit attempted, fill not guaranteed'},m,now);}}
@@ -39,7 +40,7 @@ export async function runTick({archive=true}={}){
    if((state.mode!=='running'&&!state.reviewResearch)||Date.now()-a.lastDecision<a.interval||!markets.length||a.orders.length)continue;
    if(!reserveBudget(state,Date.now())){a.status='API budget reached; no model call';continue;}
    a.lastDecision=Date.now();await commit(false);
-   try{const research=await researchMarkets(markets.filter(m=>a.id==='B'||m.series==='KXBTC15M'));const output=await decide(state,a,research);finishBudget(state,output.usage);a.name ||= output.decision.name;const d=output.decision;a.decision=d;a.status=d.action;state.verification.apiDecisions++;events.push({agent:a.id,type:'DECISION',market:d.market,marketSnapshot:(()=>{const m=markets.find(m=>m.ticker===d.market);return m?{ticker:m.ticker,title:m.title,receivedAt:m.receivedAt,close_time:m.close_time,quotes:m.quotes,feeVerified:m.feeVerified,multiplier:m.multiplier,floor_strike:m.floor_strike}:null;})(),decision:d,usage:output.usage,responseId:output.responseId});
+   try{const research=await io.researchMarkets(markets.filter(m=>a.id==='B'||m.series==='KXBTC15M'));const output=await io.decide(state,a,research);finishBudget(state,output.usage);a.name ||= output.decision.name;const d=output.decision;a.decision=d;a.status=d.action;state.verification.apiDecisions++;events.push({agent:a.id,type:'DECISION',market:d.market,marketSnapshot:(()=>{const m=markets.find(m=>m.ticker===d.market);return m?{ticker:m.ticker,title:m.title,receivedAt:m.receivedAt,close_time:m.close_time,quotes:m.quotes,feeVerified:m.feeVerified,multiplier:m.multiplier,floor_strike:m.floor_strike}:null;})(),decision:d,usage:output.usage,responseId:output.responseId});
     const m=research.find(x=>x.ticker===d.market);if(d.market&&m&&Number.isFinite(d.probability)&&!state.reviewForecasts.some(x=>x.agent===a.id&&x.decision.market===d.market)){state.reviewForecasts.push({agent:a.id,at:d.at,decision:{market:d.market,probability:d.probability,at:d.at,action:d.action,promptVersion:d.promptVersion}});state.reviewForecasts=state.reviewForecasts.slice(-60);}
     const assessment=decisionCheck(a,d,m,Date.now());a.decision.assessment=assessment;
     events.push({agent:a.id,type:'ASSESSMENT',market:d.market,assessment,history:m?.history||null});
