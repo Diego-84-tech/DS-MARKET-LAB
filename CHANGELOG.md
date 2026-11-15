@@ -4,7 +4,7 @@
 
 - Bounded initial cloud verification to ten minutes, with a $0.05 API ceiling and no automatic transition into the month-long experiment.
 - Explicit owner start transitions into the 30-day phase after successful scheduled tick verification.
-- Server-only Netlify credentials configured securely; deployed runtime and scheduled collection are being verified.
+- Server-only Netlify credentials configured securely. Three automatic cloud runs, three archives and model HOLD decisions verified; estimated API cost $0.0041. Paused after short verification, pending owner start of the 30-day phase. See VERIFICATION-0.4.1.md.
 
 ## 0.4.0 — 2026-11-15
 
