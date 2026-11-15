@@ -9,9 +9,9 @@ export async function runTick({archive=true}={}){
  const lock=await gateway('lease');if(lock.busy)return {status:'busy'};let revision=lock.revision;const state=lock.state,events=[];
  const commit=async(release=true,snapshot=null)=>{const r=await gateway('commit',{state,lease:lock.lease,revision,events:events.splice(0),release,...(snapshot?{snapshot}:{})});revision=r.revision;};
  try{
-  if(state.mode!=='running'){await commit();return {status:state.mode};}
+  if(!['running','settling'].includes(state.mode)){await commit();return {status:state.mode};}
   const now=Date.now();
-  if(now>=Date.parse(state.endsAt)||now>=Date.parse(state.keyExpiresAt)){state.mode='paused';state.error='Test window or key-expiry safety deadline reached. Owner review required.';await commit();return {status:'paused'};}
+  if(now>=Date.parse(state.endsAt)||now>=Date.parse(state.keyExpiresAt)){state.mode='settling';state.error='Test window or key safety deadline reached. No new entries or model calls; following existing positions to official outcomes.';for(const a of state.agents)a.orders=a.orders.filter(o=>o.action==='SELL');}
   if(lock.databaseBytes>460*1024*1024){state.mode='paused';state.error='DS HUB storage guard: database is above 460 MiB. No new market records or API calls.';await commit();return {status:'storage-paused'};}
   const raw=await collect(state,now);state.markets=raw.map(compactMarket);const markets=state.markets;
   try{state.spot.push(await spot());state.spot=state.spot.slice(-60);}catch{state.spot=state.spot.filter(x=>now-Date.parse(x.receivedAt)<3600000);}
@@ -26,7 +26,7 @@ export async function runTick({archive=true}={}){
   // Persist execution and reserve each API call BEFORE sending it. Unknown costs remain charged.
   await commit(false);
   for(const a of state.agents){
-   if(Date.now()-a.lastDecision<a.interval||!markets.length||a.orders.length)continue;
+   if(state.mode!=='running'||Date.now()-a.lastDecision<a.interval||!markets.length||a.orders.length)continue;
    if(!reserveBudget(state,Date.now())){a.status='API budget reached; no model call';continue;}
    a.lastDecision=Date.now();await commit(false);
    try{const output=await decide(state,a,markets);finishBudget(state,output.usage);a.name ||= output.decision.name;const d=output.decision;a.decision=d;a.status=d.action;state.verification.apiDecisions++;events.push({agent:a.id,type:'DECISION',decision:d,usage:output.usage,responseId:output.responseId});
@@ -40,8 +40,9 @@ export async function runTick({archive=true}={}){
    }catch(e){if(state.budget.reserved>0)finishBudget(state,null);events.push({agent:a.id,type:'WITHHELD',detail:String(e.message).slice(0,220)});a.status='Decision / execution withheld';}
    await commit(false);
   }
-  state.lastTick=new Date().toISOString();state.error=null;state.verification.ticks++;
+  state.lastTick=new Date().toISOString();if(state.mode==='running')state.error=null;state.verification.ticks++;
   const elapsed=now-Date.parse(state.startedAt);for(const day of [10,20,30])if(elapsed>=day*MS_DAY&&!state.checkpoints.some(x=>x.day===day)){const report={day,at:state.lastTick,accounts:state.agents.map(a=>({id:a.id,...totals(a)}))};state.checkpoints.push(report);events.push({type:'REVIEW',report});}
+  if(state.mode==='settling'&&state.agents.every(a=>!a.positions.length&&!a.orders.length))state.mode='completed';
   await commit(true,{at:state.lastTick,accounts:state.agents.map(a=>({id:a.id,...totals(a)}))});return {status:'ok',ticks:state.verification.ticks,decisions:state.verification.apiDecisions};
  }catch(e){state.lastTick=new Date().toISOString();state.error=String(e.message).slice(0,220);events.push({type:'ERROR',detail:state.error});await commit().catch(()=>{});return {status:'error',error:state.error};}
 }
