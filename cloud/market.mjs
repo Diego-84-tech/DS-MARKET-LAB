@@ -1,7 +1,7 @@
 import {quotes} from '../runner/kalshi.mjs';
 const HOST='https://external-api.kalshi.com/trade-api/v2';
 export async function publicGet(path){
- if(!/^\/(markets(?:[/?])|series\/KXBTC)/.test(path))throw Error('Public market path rejected');
+ if(!/^\/(markets(?:[/?])|historical\/markets\/[A-Z0-9-]+|series\/[A-Z0-9-]+(?:[/?]|$))/.test(path))throw Error('Public market path rejected');
  const r=await fetch(HOST+path,{method:'GET',redirect:'error',signal:AbortSignal.timeout(8000),headers:{Accept:'application/json'}});if(!r.ok)throw Error('Kalshi public data unavailable ('+r.status+')');return {data:await r.json(),receivedAt:new Date().toISOString()};
 }
 export async function collect(state,now=Date.now()){
@@ -15,7 +15,17 @@ export async function collect(state,now=Date.now()){
   const selected=series==='KXBTC15M'?list.sort((a,b)=>Date.parse(a.close_time)-Date.parse(b.close_time)).slice(0,1):list.slice(0,2);
   selected.forEach(x=>all.set(x.ticker,{...x,series,...fees[series]}));
  }
- for(const a of state.agents)for(const p of a.positions){if(all.has(p.market))continue;const {data}=await publicGet('/markets/'+encodeURIComponent(p.market));if(data.market){const series=p.market.split('-')[0];all.set(p.market,{...data.market,series,...fees[series]});}}
+ // Beta chooses across market categories; discovery is bounded and explicitly not exhaustive.
+ let cursor='';const candidates=[];
+ for(let page=0;page<3;page++){
+  const {data}=await publicGet('/markets?status=open&mve_filter=exclude&limit=200'+(cursor?'&cursor='+encodeURIComponent(cursor):''));
+  candidates.push(...(data.markets||[]).filter(m=>m.status==='active'&&Date.parse(m.open_time)<=now&&Date.parse(m.close_time)>now&&Date.parse(m.latest_expiration_time||m.expiration_time||m.close_time)<=now+30*86400000));cursor=data.cursor;if(!cursor)break;
+ }
+ candidates.sort((a,b)=>Number(b.volume_fp||b.volume||0)-Number(a.volume_fp||a.volume||0));
+ const chosen=[],perSeries=new Map();
+ for(const m of candidates){const series=m.event_ticker?.split('-')[0]||m.ticker.split('-')[0];if((perSeries.get(series)||0)>=2)continue;perSeries.set(series,(perSeries.get(series)||0)+1);chosen.push({...m,series});if(chosen.length>=8)break;}
+ for(const m of chosen){try{const {data}=await publicGet('/series/'+encodeURIComponent(m.series));const n=Number(data.series?.fee_multiplier);fees[m.series]={multiplier:n,feeVerified:data.series?.fee_type==='quadratic'&&Number.isFinite(n)&&n>=0&&n<=10};all.set(m.ticker,{...m,...fees[m.series]});}catch{/* Unverified series are not offered as executable. */}}
+ for(const a of state.agents)for(const p of a.positions){if(all.has(p.market))continue;const {data}=await publicGet('/markets/'+encodeURIComponent(p.market));if(data.market){const series=p.market.split('-')[0];if(!fees[series]){try{const {data:d}=await publicGet('/series/'+encodeURIComponent(series));const n=Number(d.series?.fee_multiplier);fees[series]={multiplier:n,feeVerified:d.series?.fee_type==='quadratic'&&Number.isFinite(n)&&n>=0&&n<=10};}catch{fees[series]={feeVerified:false};}}all.set(p.market,{...data.market,series,...fees[series]});}}
  const out=[];
  for(const m of all.values()){
   if(m.status==='active'){const {data,receivedAt}=await publicGet('/markets/'+encodeURIComponent(m.ticker)+'/orderbook?depth=1');out.push({...m,quotes:quotes(data),receivedAt,exchangeQuoteTime:null});}

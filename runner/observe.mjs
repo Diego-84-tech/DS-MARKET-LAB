@@ -15,7 +15,7 @@ await mkdir(directory,{recursive:true,mode:0o700});
 const file=join(directory,`kalshi-observation-${new Date().toISOString().replace(/[:.]/g,'-')}.ndjson`);
 await (await open(file,'wx',0o600)).close();
 const record=async data=>appendFile(file,JSON.stringify({schema:'ds-market-lab-observation-v1',source:'kalshi-public-rest',...data})+'\n');
-const state={appVersion:'0.4.3',source:'kalshi-public-rest',status:'starting',series:SERIES,latest:null,outcomes:[],error:null,attempts:0,samples:0,recording:file,intervalMs:interval};
+const state={appVersion:'0.5.0',source:'kalshi-public-rest',status:'starting',series:SERIES,latest:null,outcomes:[],error:null,attempts:0,samples:0,recording:file,intervalMs:interval};
 const api=new PublicAPI(record),seenOutcomes=new Set(),pending=new Set();
 let busy=false,stopping=false,timer;
 async function outcome(m){const o=verifiedOutcome(m);if(!o)return false;const key=JSON.stringify(o);if(!seenOutcomes.has(key)){await record({kind:'verified-outcome',receivedAt:new Date().toISOString(),outcome:o});seenOutcomes.add(key);state.outcomes=[o,...state.outcomes.filter(x=>x.market!==o.market)].slice(0,10);}pending.delete(m.ticker);return true;}
@@ -56,7 +56,7 @@ const server=createServer(async(req,res)=>{
 });
 server.on('error',e=>{console.error(`Local server failed (${e.code}); collector not started.`);process.exitCode=1;});
 server.listen(port,'127.0.0.1',async()=>{
- console.log(`DS Market Lab 0.4.3 observation: http://localhost:${port}/#live\nRecording: ${file}`);
+ console.log(`DS Market Lab 0.5.0 observation: http://localhost:${port}/#live\nRecording: ${file}`);
  try{const {data}=await api.get(`/series/${SERIES}`);if(data.series?.frequency!=='fifteen_min'||data.series?.ticker!==SERIES)throw Error('Series identity not verified');await record({kind:'series-verified',receivedAt:new Date().toISOString(),series:data.series});}
  catch(e){state.status=e.auth?'access-denied':'error';state.error=e.auth?e.message:'Series verification failed; collector not started.';return;}
  timer=setInterval(poll,interval);await poll();

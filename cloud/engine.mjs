@@ -1,5 +1,5 @@
 // Paper ledger only. No broker credentials or order submission endpoints exist.
-export const APP_VERSION='0.4.3';
+export const APP_VERSION='0.5.0';
 export const POLICY_VERSION='bank-23apr-v1';
 export const MS_DAY=86400000;
 export function initialState(now=Date.now()){
@@ -44,11 +44,23 @@ export function repay(state,agent,amount,now=Date.now()){
 }
 export function fee(quantity,price,multiplier=1){return Math.ceil(.07*multiplier*quantity*(price/10000)*(1-price/10000)*100-1e-8);}
 export function quoteFor(m,side,action){return m?.quotes?.[side==='YES'?(action==='BUY'?'yesAsk':'yesBid'):(action==='BUY'?'noAsk':'noBid')];}
-export function eligible(m,agent,now){const close=Date.parse(m.close_time),end=Date.parse(m.latest_expiration_time||m.expiration_time||m.close_time);return m.status==='active'&&Date.parse(m.open_time)<=now&&close>now&&(agent.id!=='A'||(m.series==='KXBTC15M'&&close-now>120000))&&end<=now+30*MS_DAY&&m.feeVerified===true;}
+export function entryBlock(m,agent,now){
+ if(!m)return 'The selected market was not supplied in this research update.';
+ if(!Number.isFinite(Date.parse(m.open_time))||!Number.isFinite(Date.parse(m.close_time))||!Number.isFinite(Date.parse(m.latest_expiration_time||m.expiration_time||m.close_time)))return 'Market trading times or settlement horizon are missing.';
+ if(m.status!=='active')return 'This market is not open for trading.';
+ if(Date.parse(m.open_time)>now)return 'This market has not opened yet.';
+ if(Date.parse(m.close_time)<=now)return 'This market has closed.';
+ if(agent.id==='A'&&m.series!=='KXBTC15M')return 'AlphaBot only trades BTC 15-minute rounds.';
+ if(agent.id==='A'&&Date.parse(m.close_time)-now<=120000)return 'Fewer than two minutes remain in this round. New entries stop two minutes before close.';
+ if(Date.parse(m.latest_expiration_time||m.expiration_time||m.close_time)>now+30*MS_DAY)return 'Latest settlement is beyond the 30-day allowed horizon.';
+ if(m.feeVerified!==true)return 'The series fee formula has not been verified. Paper fills remain blocked.';
+ return null;
+}
+export const eligible=(m,agent,now)=>!entryBlock(m,agent,now);
 export function queueOrder(state,agent,d,m,now=Date.now()){
  if(!['BUY','SELL'].includes(d.action)||!m||!['YES','NO'].includes(d.side)||!Number.isFinite(d.fraction)||d.fraction<=0||d.fraction>1||!Number.isInteger(d.limit)||d.limit<1||d.limit>9999)throw Error('Invalid proposed paper order.');
  if(agent.orders.length)throw Error('An order is already pending.');
- if(d.action==='BUY'&&!eligible(m,agent,now))throw Error('Market does not fit this agent or fee/rule verification is missing.');
+ if(d.action==='BUY'&&entryBlock(m,agent,now))throw Error(entryBlock(m,agent,now));
  if(d.action==='BUY'&&agent.positions.length>=8)throw Error('Manage existing positions before opening more.');
  if(d.action==='SELL'&&!agent.positions.some(p=>p.market===m.ticker&&p.side===d.side))throw Error('No matching position to sell.');
  const o={id:crypto.randomUUID(),agent:agent.id,market:m.ticker,side:d.side,action:d.action,fraction:d.fraction,limit:d.limit,budget:Math.floor(agent.cash*d.fraction),createdAt:now,notBefore:now+10000,expiresAt:now+180000,reason:d.summary};agent.orders.push(o);return o;
@@ -61,7 +73,7 @@ export function executeOrders(state,markets,now=Date.now()){
    if(!q||!fresh||m.quotes.crossed||m.status!=='active'||Date.parse(m.close_time)<=now||m.feeVerified!==true){keep.push(o);continue;}
    const valid=o.action==='BUY'?q.price<=o.limit:q.price>=o.limit;if(!valid){keep.push(o);continue;}
    // Use only 10% of displayed best-level depth; two agents share that allowance.
-   const key=m.ticker+o.side+o.action,depth=Math.max(0,Math.floor(q.quantity/100*.1)-(consumed.get(key)||0));let quantity=0,gross=0,costFee=0;
+   const key=m.ticker+o.side+o.action,depth=Math.max(0,Math.floor(q.quantity/100*.1)-(consumed.get(key)||0));let quantity=0,gross=0,costFee=0,pnl=null;
    if(o.action==='BUY'){
     if(!eligible(m,a,now)){events.push({agent:a.id,type:'UNFILLED',detail:'Entry window or settlement horizon ended',order:o.id});continue;}
     const budget=Math.min(a.cash,o.budget);quantity=Math.min(depth,Math.floor(budget*100/q.price));while(quantity>0&&Math.ceil(quantity*q.price/100)+fee(quantity,q.price,m.multiplier)>budget)quantity--;
@@ -69,9 +81,9 @@ export function executeOrders(state,markets,now=Date.now()){
     const p=a.positions.find(p=>p.market===o.market&&p.side===o.side);if(p){p.quantity+=quantity;p.cost+=gross+costFee;}else a.positions.push({market:o.market,side:o.side,quantity,cost:gross+costFee,mark:Math.floor(quantity*q.price/100),openedAt:now,close_time:m.close_time,expiration_time:m.latest_expiration_time||m.expiration_time||null,deadline:now+30*MS_DAY});
    }else{
     const p=a.positions.find(p=>p.market===o.market&&p.side===o.side);if(!p)continue;quantity=Math.min(depth,p.quantity,Math.max(1,Math.floor(p.quantity*o.fraction)));if(!quantity){keep.push(o);continue;}
-    gross=Math.floor(quantity*q.price/100);costFee=fee(quantity,q.price,m.multiplier);if(gross<costFee){keep.push(o);continue;}const basis=quantity===p.quantity?p.cost:Math.ceil(p.cost*quantity/p.quantity);a.cash+=gross-costFee;a.realized+=gross-costFee-basis;a.fees+=costFee;p.quantity-=quantity;p.cost-=basis;if(!p.quantity)a.positions=a.positions.filter(x=>x!==p);
+    gross=Math.floor(quantity*q.price/100);costFee=fee(quantity,q.price,m.multiplier);if(gross<costFee){keep.push(o);continue;}const basis=quantity===p.quantity?p.cost:Math.ceil(p.cost*quantity/p.quantity);a.cash+=gross-costFee;pnl=gross-costFee-basis;a.realized+=pnl;a.fees+=costFee;p.quantity-=quantity;p.cost-=basis;if(!p.quantity)a.positions=a.positions.filter(x=>x!==p);
    }
-   consumed.set(key,(consumed.get(key)||0)+quantity);events.push({agent:a.id,type:o.action,market:o.market,side:o.side,quantity,price:q.price,fee:costFee,cash:a.cash,reason:o.reason,order:o.id,assumption:'Delayed, conservative top-depth taker paper fill; not a real fill'});
+   consumed.set(key,(consumed.get(key)||0)+quantity);events.push({agent:a.id,type:o.action,market:o.market,side:o.side,quantity,price:q.price,fee:costFee,pnl,gross,cash:a.cash,at:new Date(now).toISOString(),reason:o.reason,order:o.id,assumption:'Delayed, conservative top-depth taker paper fill; not a real fill'});
   }a.orders=keep;
   for(const p of [...a.positions]){const m=markets.find(x=>x.ticker===p.market);if(!m){p.markStale=true;continue;}
    if(['settled','finalized'].includes(m.status)&&['yes','no'].includes(m.result)&&m.is_provisional!==true&&Number.isFinite(Date.parse(m.settlement_ts))){const paid=p.side.toLowerCase()===m.result?p.quantity*100:0;a.cash+=paid;a.realized+=paid-p.cost;a.positions=a.positions.filter(x=>x!==p);events.push({agent:a.id,type:'SETTLE',market:p.market,result:m.result,payout:paid,pnl:paid-p.cost});continue;}

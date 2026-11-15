@@ -1,4 +1,4 @@
-# DS Market Lab — 0.4.3 cloud paper experiment
+# DS Market Lab — 0.5.0 cloud paper experiment
 
 DS TECHNOLOGY™ · Real Kalshi public data, OpenAI research decisions, FAKE money only.
 
@@ -45,3 +45,9 @@ Runtime state is capped at 200 KB; recent charts retain seven days. Financial/de
 Release 0.4.2 adds recoverable sign-in startup. Existing cloud session records retain compatible 0.4.1 ledger format; their balances and state are not rewritten for a frontend fix.
 
 Release 0.4.3 adds persistent Back and Home controls. Back stays within the app and Home returns to Trading.
+
+## 0.5.0 — simpler recorded-market workspace
+Home links to Recordings, Trading, Profiles and Requests; experiment controls live in Settings. Black/charcoal, white text, blue controls, green gains/red losses. Reading is stable: polls stage new state behind an explicit update button; details and scroll do not get replaced on the polling timer.
+Recordings use Kalshi historical one-minute OHLC where available plus actual scheduled quote samples, never invented ticks. Initial histories are read from market open for BTC rounds and up to one hour before tracking for flexible markets. API gaps remain gaps; polls are approximately one minute, not a streaming exchange terminal. Closed historical market imports cannot establish what the agent actually saw before the recording existed. Each decision now retains its supplied market snapshot; old decisions retain original evidence without invented snapshots.
+Beta chooses across a bounded discovered set of categories and durations <=30 days. No universal market coverage is claimed. Unverified fees and rules remain blocked, and new entries for AlphaBot stop two minutes before round close. Financial protections remain in force.
+One original agent-chosen avatar per permanent ID. Additional image applications cost $5 fake earned profit with owner approval, assessed again at generation. Initial images cost no fake cash. Real API image budget $1 total, conservative $0.10 reservation per attempt, no automatic retries after failure. Private image blobs served only after owner session validation. API billing may differ from the reservation. Avatar job runs as a bounded Netlify background job, separate from trading mode; a paused trading test remains paused.

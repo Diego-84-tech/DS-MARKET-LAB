@@ -15,14 +15,24 @@ ALTER TABLE market_lab_private.runtime ENABLE ROW LEVEL SECURITY;
 ALTER TABLE market_lab_private.events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE market_lab_private.snapshots ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON ALL TABLES IN SCHEMA market_lab_private FROM PUBLIC,anon,authenticated;
+CREATE TABLE IF NOT EXISTS market_lab_private.recordings(ticker text PRIMARY KEY, metadata jsonb NOT NULL);
+CREATE TABLE IF NOT EXISTS market_lab_private.frames(ticker text NOT NULL REFERENCES market_lab_private.recordings(ticker), at timestamptz NOT NULL, source text NOT NULL, data jsonb NOT NULL, PRIMARY KEY(ticker,at,source));
+ALTER TABLE market_lab_private.recordings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE market_lab_private.frames ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON market_lab_private.recordings,market_lab_private.frames FROM PUBLIC,anon,authenticated;
 CREATE OR REPLACE FUNCTION market_lab_private.gateway(p_action text,p_payload jsonb DEFAULT '{}'::jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
-DECLARE r market_lab_private.runtime%ROWTYPE; own boolean; worker boolean; item jsonb; s jsonb; out jsonb;
+DECLARE r market_lab_private.runtime%ROWTYPE; own boolean; worker boolean; item jsonb; frame jsonb; s jsonb; out jsonb;
 BEGIN
  SELECT * INTO r FROM market_lab_private.runtime WHERE id=true FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Market Lab not initialized'; END IF;
  own := auth.uid()='03ea936c-ea51-416d-bf32-b6c99a1da220'::uuid;
  worker := p_payload ? 'worker' AND encode(extensions.digest(p_payload->>'worker','sha256'),'hex')=r.worker_hash;
+ IF p_action IN ('recordings','recording') THEN
+  IF NOT coalesce(own,false) AND NOT coalesce(worker,false) THEN RAISE EXCEPTION 'Owner access required' USING ERRCODE='42501'; END IF;
+  IF p_action='recordings' THEN RETURN jsonb_build_object('recordings',(SELECT coalesce(jsonb_agg(x.metadata ORDER BY x.metadata->>'close_time' DESC),'[]'::jsonb) FROM (SELECT metadata FROM market_lab_private.recordings ORDER BY metadata->>'close_time' DESC LIMIT 200)x)); END IF;
+  RETURN jsonb_build_object('metadata',(SELECT metadata FROM market_lab_private.recordings WHERE ticker=p_payload->>'ticker'),'frames',(SELECT coalesce(jsonb_agg(x.data ORDER BY x.at),'[]'::jsonb) FROM (SELECT at,data FROM market_lab_private.frames WHERE ticker=p_payload->>'ticker' ORDER BY at DESC LIMIT 6000)x),'events',(SELECT coalesce(jsonb_agg(e.data ORDER BY e.id),'[]'::jsonb) FROM market_lab_private.events e WHERE coalesce(e.data->>'market',e.data->'order'->>'market',e.data->'decision'->>'market')=p_payload->>'ticker'));
+ END IF;
  IF p_action='history' THEN
   IF NOT coalesce(own,false) THEN RAISE EXCEPTION 'Owner access required' USING ERRCODE='42501'; END IF;
   RETURN jsonb_build_object('events',(SELECT coalesce(jsonb_agg(x.data||jsonb_build_object('recordId',x.id) ORDER BY x.id),'[]'::jsonb) FROM (SELECT id,data FROM market_lab_private.events WHERE id>coalesce((p_payload->>'after')::bigint,0) ORDER BY id LIMIT 500)x));
@@ -41,15 +51,20 @@ BEGIN
  IF p_action='commit' THEN
   IF r.lease IS DISTINCT FROM p_payload->>'lease' OR r.lease_until<=now() OR r.revision<>(p_payload->>'revision')::bigint THEN RAISE EXCEPTION 'Stale worker lease'; END IF;
   s:=p_payload->'state';
-  IF s->>'version' NOT IN ('0.4.1','0.4.2','0.4.3') OR jsonb_array_length(s->'agents')<>2 OR pg_column_size(s)>200000 THEN RAISE EXCEPTION 'Invalid state'; END IF;
+  IF s->>'version' NOT IN ('0.4.1','0.4.2','0.4.3','0.5.0') OR jsonb_array_length(s->'agents')<>2 OR pg_column_size(s)>200000 THEN RAISE EXCEPTION 'Invalid state'; END IF;
   UPDATE market_lab_private.runtime SET state=s,revision=revision+1,updated_at=now(),lease=CASE WHEN coalesce((p_payload->>'release')::boolean,true) THEN NULL ELSE lease END,lease_until=CASE WHEN coalesce((p_payload->>'release')::boolean,true) THEN NULL ELSE now()+interval '4 minutes' END WHERE id=true RETURNING * INTO r;
   FOR item IN SELECT value FROM jsonb_array_elements(coalesce(p_payload->'events','[]'::jsonb)) LOOP
    IF pg_column_size(item)>12000 THEN RAISE EXCEPTION 'Oversized event'; END IF;
    INSERT INTO market_lab_private.events(data) VALUES(item||jsonb_build_object('at',coalesce(item->>'at',now()::text)));
   END LOOP;
+  FOR item IN SELECT value FROM jsonb_array_elements(coalesce(p_payload->'recordings','[]'::jsonb)) LOOP
+   IF length(item->>'ticker')>150 OR pg_column_size(item)>300000 THEN RAISE EXCEPTION 'Invalid recording'; END IF;
+   INSERT INTO market_lab_private.recordings(ticker,metadata) VALUES(item->>'ticker',item->'metadata') ON CONFLICT(ticker) DO UPDATE SET metadata=market_lab_private.recordings.metadata||excluded.metadata;
+   FOR frame IN SELECT value FROM jsonb_array_elements(item->'frames') LOOP
+    INSERT INTO market_lab_private.frames(ticker,at,source,data) VALUES(item->>'ticker',(frame->>'at')::timestamptz,frame->>'source',frame) ON CONFLICT DO NOTHING;
+   END LOOP;
+  END LOOP;
   IF p_payload ? 'snapshot' THEN INSERT INTO market_lab_private.snapshots(minute,data) VALUES(date_trunc('minute',now()),p_payload->'snapshot') ON CONFLICT(minute) DO NOTHING; END IF;
-  -- Bounded chart history only. Financial and decision events are not purged here.
-  DELETE FROM market_lab_private.snapshots WHERE minute<now()-interval '7 days';
   RETURN jsonb_build_object('revision',r.revision,'lease',r.lease);
  END IF;
  RAISE EXCEPTION 'Unknown Market Lab action';

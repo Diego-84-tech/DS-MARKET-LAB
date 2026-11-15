@@ -2,10 +2,10 @@
   "name": "ds-market-lab",
   "private": true,
   "type": "module",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check dist/app.mjs && node --check dist/engine.mjs && node --check dist/strategy.mjs && node --check dist/strategy-ui.mjs && node --check runner/practice.mjs && node --check dist/live-ui.mjs && node --check runner/kalshi.mjs && node --check runner/observe.mjs && node --check cloud/engine.mjs && node --check cloud/market.mjs && node --check cloud/agents.mjs && node --check cloud/worker.mjs && node --check netlify/functions/lab.mjs && node --check netlify/functions/paper-tick.mjs && node --check dist/cloud-ui.mjs && node --check dist/connection.mjs && node --check dist/navigation.mjs",
+    "check": "node --check dist/app.mjs && node --check dist/engine.mjs && node --check dist/strategy.mjs && node --check dist/strategy-ui.mjs && node --check runner/practice.mjs && node --check dist/live-ui.mjs && node --check runner/kalshi.mjs && node --check runner/observe.mjs && node --check cloud/engine.mjs && node --check cloud/market.mjs && node --check cloud/agents.mjs && node --check cloud/worker.mjs && node --check netlify/functions/lab.mjs && node --check netlify/functions/paper-tick.mjs && node --check dist/cloud-ui.mjs && node --check dist/connection.mjs && node --check dist/navigation.mjs && node --check cloud/identity.mjs && node --check cloud/recordings.mjs && node --check cloud/avatars.mjs && node --check dist/presentation.mjs && node --check netlify/functions/avatar-background.mjs && node --check netlify/functions/avatar-dispatch.mjs",
     "observe": "node runner/observe.mjs"
   },
   "dependencies": {
