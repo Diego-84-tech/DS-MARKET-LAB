@@ -1,3 +1,8 @@
+import {createHash} from 'node:crypto';
+import {APP_VERSION} from './engine.mjs';
+import {workspaceGateway} from './store.mjs';
+import {ownerFunding} from './owner-funding.mjs';
+import {researchPacing} from './policy.mjs';
 import {nightlyReview} from './nightly-review.mjs';
 import {PROMPT_VERSION} from './agents.mjs';
 import {requestReplacement,settleRetiring} from './replacement.mjs';
@@ -19,6 +24,7 @@ export async function runTick({archive=true,services={}}={}){
  const commit=async(release=true,snapshot=null)=>{events.push(...updateAchievements(state,events));const batch=events.slice(),savedRecordings=recordings.slice();const r=await io.gateway('commit',{state,lease:lock.lease,revision,events:batch,recordings:savedRecordings,release,...(snapshot?{snapshot}:{})});revision=r.revision;events.splice(0,batch.length);recordings.splice(0,savedRecordings.length);};
  try{
   if(state.agentRulesVersion!==PROMPT_VERSION){state.agentRulesVersion=PROMPT_VERSION;state.rules={promptVersion:PROMPT_VERSION,objective:'Net profit after fees and interest; no chasing losses; HOLD is permitted.',roles:{AlphaBot:'BTC 15-minute only',Beta:'Any supplied Kalshi market, horizon up to 30 days'},incentives:'Cosmetic server-verified badges only; extra pictures require owner approval and earned paper profit.',replacement:'Owner confirmation; obligations resolved and immutable archive verified before new run. Other agent continues.',nightlyReview:'9 PM America/New_York; owner review, no automatic funding or penalties.',budgets:{dailyResearch:state.budget.dailyCap,totalResearch:state.budget.cap,image:state.imageBudget.cap}};events.push({type:'RULES_UPDATED',detail:'Net profit after fees and interest; no loss chasing; cosmetic badges only; owner-approved replacement after verified archive; nightly 9 PM Eastern review does not automatically change cash.',promptVersion:PROMPT_VERSION});}
+  if(!services.gateway&&state.workspaceRelease!==APP_VERSION){const h=createHash('sha256').update('market-lab-release:'+APP_VERSION).digest('hex').slice(0,32),requestId=[h.slice(0,8),h.slice(8,12),h.slice(12,16),h.slice(16,20),h.slice(20)].join('-');await workspaceGateway('release-note',{requestId,text:'Release '+APP_VERSION+': owner-authorized instruction journal, per-run saved chats, profile appreciation and paper funding. Price context now carries explicit dollars/cents and validation feedback. Existing strategy settings and AI spending caps unchanged by default. Exact current and historical source is retained in the source inventory.',data:{version:APP_VERSION,promptVersion:PROMPT_VERSION,sourceInventory:'/data/rule-catalog.json'}});state.workspaceRelease=APP_VERSION;}
   if(!shouldMonitor(state)){await commit();return {status:state.mode};}
   const now=Date.now();if(state.mode==='paused')for(const a of state.agents)a.orders=a.orders.filter(o=>o.action==='SELL');
   if(state.phase==='verification'&&(!Number.isFinite(Date.parse(state.verificationEndsAt))||now>=Date.parse(state.verificationEndsAt))){state.mode='paused';state.error='Ten-minute cloud verification ended. Owner review required before the 30-day experiment.';await commit();return {status:'verification-ended'};}
@@ -44,11 +50,12 @@ export async function runTick({archive=true,services={}}={}){
   await commit(false);
   for(const a of state.agents){
    if(a.lifecycle!=='active'||(state.mode!=='running'&&!state.reviewResearch)||Date.now()-a.lastDecision<a.interval||!markets.length||a.orders.length)continue;
+   const paced=researchPacing(state);if(paced){a.status=paced;continue;}
    if(!reserveBudget(state,Date.now())){a.status='API budget reached; no model call';continue;}
    a.lastDecision=Date.now();await commit(false);
-   try{const research=await io.researchMarkets(markets.filter(m=>a.id==='B'||m.series==='KXBTC15M'));const output=await io.decide(state,a,research);finishBudget(state,output.usage);a.name ||= output.decision.name;const d=output.decision;a.decision=d;a.status=d.action;state.verification.apiDecisions++;events.push({agent:a.id,type:'DECISION',market:d.market,marketSnapshot:(()=>{const m=markets.find(m=>m.ticker===d.market);return m?{ticker:m.ticker,title:m.title,receivedAt:m.receivedAt,close_time:m.close_time,quotes:m.quotes,feeVerified:m.feeVerified,multiplier:m.multiplier,floor_strike:m.floor_strike}:null;})(),decision:d,usage:output.usage,responseId:output.responseId});
+   try{const research=await io.researchMarkets(markets.filter(m=>a.id==='B'||!a.policy.alpha15Only||m.series==='KXBTC15M'));const output=await io.decide(state,a,research);finishBudget(state,output.usage);a.name ||= output.decision.name;const d=output.decision;a.decision=d;a.status=d.action;state.verification.apiDecisions++;events.push({agent:a.id,type:'DECISION',market:d.market,marketSnapshot:(()=>{const m=markets.find(m=>m.ticker===d.market);return m?{ticker:m.ticker,title:m.title,receivedAt:m.receivedAt,close_time:m.close_time,quotes:m.quotes,feeVerified:m.feeVerified,multiplier:m.multiplier,floor_strike:m.floor_strike}:null;})(),decision:d,usage:output.usage,responseId:output.responseId});
     const m=research.find(x=>x.ticker===d.market);if(d.market&&m&&Number.isFinite(d.probability)&&!state.reviewForecasts.some(x=>x.agent===a.id&&x.decision.market===d.market)){state.reviewForecasts.push({agent:a.id,at:d.at,decision:{market:d.market,probability:d.probability,at:d.at,action:d.action,promptVersion:d.promptVersion}});state.reviewForecasts=state.reviewForecasts.slice(-60);}
-    const assessment=decisionCheck(a,d,m,Date.now());a.decision.assessment=assessment;
+    const assessment=decisionCheck(a,d,m,Date.now());a.decision.assessment=assessment;a.lastCheckFailure=null;
     events.push({agent:a.id,type:'ASSESSMENT',checked:true,market:d.market,assessment,history:m?.history||null});
     if(d.action==='BUY'||d.action==='SELL'){
      if(d.action==='BUY'&&state.reviewRequired){a.status='Review only · purchase not placed';events.push({agent:a.id,type:'SHADOW_PROPOSAL',market:d.market,detail:'New purchases remain paused. This checked proposal is recorded for review, not execution.',assessment});}
@@ -59,7 +66,7 @@ export async function runTick({archive=true,services={}}={}){
     else if(d.action==='REQUEST_IMAGE'){const application=requestImage(a,d.imagePrompt||d.evidence,d.summary);events.push({agent:a.id,type:'IMAGE_APPLICATION',application});}
     else if(d.action==='REPAY'&&d.amountCents>0){const paid=repay(state,a,d.amountCents);events.push({agent:a.id,type:'REPAY',amount:paid});}
     state.notes.push({agent:a.id,at:d.at,lesson:d.lesson,evidence:d.evidence});state.notes=state.notes.slice(-20);
-   }catch(e){if(state.budget.reserved>0)finishBudget(state,null);events.push({agent:a.id,type:'WITHHELD',market:a.decision?.market,decisionAt:a.decision?.at,detail:String(e.message).slice(0,220)});a.status='Decision / execution withheld';}
+   }catch(e){if(state.budget.reserved>0)finishBudget(state,null);events.push({agent:a.id,type:'WITHHELD',market:a.decision?.market,decisionAt:a.decision?.at,detail:String(e.message).slice(0,220)});a.lastCheckFailure={at:new Date().toISOString(),decisionAt:a.decision?.at,detail:String(e.message).slice(0,220)};a.status='Decision / execution withheld';}
    await commit(false);
   }
   state.lastTick=new Date().toISOString();if(state.mode==='running')state.error=null;state.verification.ticks++;
@@ -74,6 +81,7 @@ export async function control(jwt,action,payload={}){
  await gateway('read',{},jwt);const lock=await gateway('lease');if(lock.busy)throw Error('Worker is busy. Try again shortly.');const s=upgrade(structuredClone(lock.state));let event;
  try{
   if(action==='start'){const blocked=resumeBlock(s,payload.reviewAcknowledged);if(blocked)throw Error(blocked);const now=Date.now();if(s.phase==='verification'){if(s.verification.ticks<2)throw Error('Cloud verification must complete first.');s.phase='experiment';s.budget.cap=30;s.budget.dailyCap=1;s.verificationEndsAt=null;}if(!s.startedAt){s.startedAt=new Date(now).toISOString();s.endsAt=new Date(now+30*MS_DAY).toISOString();}if(now>=Date.parse(s.endsAt))throw Error('Experiment ended. Preserve records and review before a new experiment.');s.reviewRequired=false;s.reviewResearch=false;s.mode='running';s.error=null;event={type:'START',detail:'Owner enabled paper test'};}
+  else if(action==='owner-funding'){event=ownerFunding(s,payload);}
   else if(action==='replace-agent'){const replacement=requestReplacement(s,payload);event={type:'REPLACEMENT_REQUEST',agent:payload.agent,runId:payload.expectedRunId,replacement,detail:'Owner confirmed replacement. Existing obligations must finish before archiving.'};}
   else if(action==='retry-identity'){const a=s.agents.find(a=>a.id===payload.agent);if(!a||a.lifecycle!=='onboarding')throw Error('No onboarding pending');const r=a.imageRequests.find(r=>r.free&&r.status==='failed');if(!r)throw Error('No failed initial picture');r.status='approved';event={type:'IDENTITY_RETRY',agent:a.id};}
   else if(action==='pause'){pauseEntries(s);s.reviewResearch=false;event={type:'PAUSE',detail:'Owner paused paper test'};}

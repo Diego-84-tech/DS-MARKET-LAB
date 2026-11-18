@@ -1,5 +1,5 @@
 // Paper ledger only. No broker credentials or order submission endpoints exist.
-export const APP_VERSION='0.8.0';
+export const APP_VERSION='0.9.0';
 export const LEDGER_VERSION='0.5.0';
 export const POLICY_VERSION='bank-23apr-v1';
 export const MS_DAY=86400000;
@@ -11,7 +11,7 @@ export function interest(loan,now=Date.now()){return (loan.unpaidInterest||0)+Ma
 export function totals(agent,now=Date.now()){
  const invested=agent.positions.reduce((s,p)=>s+p.cost,0),value=agent.positions.reduce((s,p)=>s+(p.mark??p.cost),0),debt=agent.loans.reduce((s,l)=>s+l.principal,0),owed=agent.loans.reduce((s,l)=>s+interest(l,now),0);
  const net=agent.cash+value-debt-owed;
- return {cash:agent.cash,invested,value,debt,interest:owed,realized:agent.realized-agent.interestPaid,unrealized:value-invested,net,pnl:net-agent.start,returnPct:100*(net-agent.start)/agent.start};
+ return {cash:agent.cash,invested,value,debt,interest:owed,realized:agent.realized-agent.interestPaid,unrealized:value-invested,net,pnl:net-agent.start-(agent.ownerCredits||0),returnPct:100*(net-agent.start-(agent.ownerCredits||0))/(agent.start+(agent.ownerCredits||0))};
 }
 export function loanTerms(agent){
  const base=agent.id==='A'?10000:50000,first=base/2,outstanding=agent.loans.reduce((s,l)=>s+l.principal,0),repaid=agent.repaidLoans||0,extra=agent.supplementalLoans||0;

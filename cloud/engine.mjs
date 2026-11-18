@@ -1,5 +1,6 @@
+import {policyFor} from './policy.mjs';
 // Paper ledger only. No broker credentials or order submission endpoints exist.
-export const APP_VERSION='0.8.0';
+export const APP_VERSION='0.9.0';
 export const LEDGER_VERSION='0.5.0';
 export const POLICY_VERSION='bank-23apr-v1';
 export const MS_DAY=86400000;
@@ -11,7 +12,7 @@ export function interest(loan,now=Date.now()){return (loan.unpaidInterest||0)+Ma
 export function totals(agent,now=Date.now()){
  const invested=agent.positions.reduce((s,p)=>s+p.cost,0),value=agent.positions.reduce((s,p)=>s+(p.mark??p.cost),0),debt=agent.loans.reduce((s,l)=>s+l.principal,0),owed=agent.loans.reduce((s,l)=>s+interest(l,now),0);
  const net=agent.cash+value-debt-owed;
- return {cash:agent.cash,invested,value,debt,interest:owed,realized:agent.realized-agent.interestPaid,unrealized:value-invested,net,pnl:net-agent.start,returnPct:100*(net-agent.start)/agent.start};
+ return {cash:agent.cash,invested,value,debt,interest:owed,realized:agent.realized-agent.interestPaid,unrealized:value-invested,net,pnl:net-agent.start-(agent.ownerCredits||0),returnPct:100*(net-agent.start-(agent.ownerCredits||0))/(agent.start+(agent.ownerCredits||0))};
 }
 export function loanTerms(agent){
  const base=agent.id==='A'?10000:50000,first=base/2,outstanding=agent.loans.reduce((s,l)=>s+l.principal,0),repaid=agent.repaidLoans||0,extra=agent.supplementalLoans||0;
@@ -51,9 +52,9 @@ export function entryBlock(m,agent,now){
  if(m.status!=='active')return 'This market is not open for trading.';
  if(Date.parse(m.open_time)>now)return 'This market has not opened yet.';
  if(Date.parse(m.close_time)<=now)return 'This market has closed.';
- if(agent.id==='A'&&m.series!=='KXBTC15M')return 'AlphaBot only trades BTC 15-minute rounds.';
- if(agent.id==='A'&&Date.parse(m.close_time)-now<=120000)return 'Fewer than two minutes remain in this round. New entries stop two minutes before close.';
- if(Date.parse(m.latest_expiration_time||m.expiration_time||m.close_time)>now+30*MS_DAY)return 'Latest settlement is beyond the 30-day allowed horizon.';
+ if(agent.id==='A'&&policyFor(agent).alpha15Only&&m.series!=='KXBTC15M')return 'AlphaBot only trades BTC 15-minute rounds.';
+ if(agent.id==='A'&&Date.parse(m.close_time)-now<=policyFor(agent).alphaCloseMinutes*60000)return 'Fewer than two minutes remain in this round. New entries stop two minutes before close.';
+ if(Date.parse(m.latest_expiration_time||m.expiration_time||m.close_time)>now+policyFor(agent).maximumHorizonDays*MS_DAY)return 'Latest settlement is beyond the 30-day allowed horizon.';
  if(m.feeVerified!==true)return 'The series fee formula has not been verified. Paper fills remain blocked.';
  return null;
 }
@@ -64,7 +65,7 @@ export function queueOrder(state,agent,d,m,now=Date.now()){
  if(d.action==='BUY'&&state.reviewRequired)throw Error('New purchases are paused for review.');
  if(agent.orders.length)throw Error('An order is already pending.');
  if(d.action==='BUY'&&entryBlock(m,agent,now))throw Error(entryBlock(m,agent,now));
- if(d.action==='BUY'&&agent.positions.length>=8)throw Error('Manage existing positions before opening more.');
+ if(d.action==='BUY'&&agent.positions.length>=policyFor(agent).maximumPositions)throw Error('Manage existing positions before opening more.');
  if(d.action==='SELL'&&!agent.positions.some(p=>p.market===m.ticker&&p.side===d.side))throw Error('No matching position to sell.');
  const o={id:crypto.randomUUID(),agent:agent.id,market:m.ticker,side:d.side,action:d.action,fraction:d.fraction,limit:d.limit,budget:Math.floor(agent.cash*d.fraction),createdAt:now,notBefore:now+10000,expiresAt:now+180000,reason:d.summary,automaticExit:d.automaticExit===true,entryForecast:Number.isFinite(d.probability)?{probability:d.probability,at:d.at||new Date(now).toISOString(),promptVersion:d.promptVersion||null}:null,exitPlan:d.assessment?.plan||null};agent.orders.push(o);return o;
 }
@@ -82,7 +83,7 @@ export function executeOrders(state,markets,now=Date.now()){
     if(!eligible(m,a,now)){events.push({agent:a.id,type:'UNFILLED',detail:'Entry window or settlement horizon ended',order:o.id,market:o.market,side:o.side});continue;}
     const budget=Math.min(a.cash,o.budget);quantity=Math.min(depth,Math.floor(budget*100/q.price));while(quantity>0&&Math.ceil(quantity*q.price/100)+fee(quantity,q.price,m.multiplier)>budget)quantity--;
     if(!quantity){keep.push(o);continue;}gross=Math.ceil(quantity*q.price/100);costFee=fee(quantity,q.price,m.multiplier);a.cash-=gross+costFee;a.fees+=costFee;
-    const p=a.positions.find(p=>p.market===o.market&&p.side===o.side);if(p){p.quantity+=quantity;p.cost+=gross+costFee;if(o.exitPlan)p.exitPlan=p.exitPlan?{stopPrice:Math.max(p.exitPlan.stopPrice,o.exitPlan.stopPrice),takeProfitPrice:Math.min(p.exitPlan.takeProfitPrice,o.exitPlan.takeProfitPrice),exitAt:Math.min(p.exitPlan.exitAt,o.exitPlan.exitAt)}:o.exitPlan;}else a.positions.push({market:o.market,side:o.side,quantity,cost:gross+costFee,mark:Math.floor(quantity*q.price/100),openedAt:now,close_time:m.close_time,expiration_time:m.latest_expiration_time||m.expiration_time||null,deadline:now+30*MS_DAY,entryForecast:o.entryForecast,exitPlan:o.exitPlan});
+    const p=a.positions.find(p=>p.market===o.market&&p.side===o.side);if(p){p.quantity+=quantity;p.cost+=gross+costFee;if(o.exitPlan)p.exitPlan=p.exitPlan?{stopPrice:Math.max(p.exitPlan.stopPrice,o.exitPlan.stopPrice),takeProfitPrice:Math.min(p.exitPlan.takeProfitPrice,o.exitPlan.takeProfitPrice),exitAt:Math.min(p.exitPlan.exitAt,o.exitPlan.exitAt)}:o.exitPlan;}else a.positions.push({market:o.market,side:o.side,quantity,cost:gross+costFee,mark:Math.floor(quantity*q.price/100),openedAt:now,close_time:m.close_time,expiration_time:m.latest_expiration_time||m.expiration_time||null,deadline:now+policyFor(a).maximumHorizonDays*MS_DAY,entryForecast:o.entryForecast,exitPlan:o.exitPlan});
    }else{
     const p=a.positions.find(p=>p.market===o.market&&p.side===o.side);if(!p)continue;quantity=Math.min(depth,p.quantity,Math.max(1,Math.floor(p.quantity*o.fraction)));if(!quantity){keep.push(o);continue;}
     entryForecast=p.entryForecast||null;openedAt=p.openedAt;planExit=o.automaticExit===true&&!!p.exitPlan;gross=Math.floor(quantity*q.price/100);costFee=fee(quantity,q.price,m.multiplier);if(gross<costFee){keep.push(o);continue;}const basis=quantity===p.quantity?p.cost:Math.ceil(p.cost*quantity/p.quantity);a.cash+=gross-costFee;pnl=gross-costFee-basis;a.realized+=pnl;a.fees+=costFee;p.quantity-=quantity;p.cost-=basis;positionClosed=p.quantity===0;if(!p.quantity)a.positions=a.positions.filter(x=>x!==p);
