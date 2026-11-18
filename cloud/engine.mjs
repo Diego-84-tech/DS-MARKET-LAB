@@ -53,8 +53,8 @@ export function entryBlock(m,agent,now){
  if(Date.parse(m.open_time)>now)return 'This market has not opened yet.';
  if(Date.parse(m.close_time)<=now)return 'This market has closed.';
  if(agent.id==='A'&&policyFor(agent).alpha15Only&&m.series!=='KXBTC15M')return 'AlphaBot only trades BTC 15-minute rounds.';
- if(agent.id==='A'&&Date.parse(m.close_time)-now<=policyFor(agent).alphaCloseMinutes*60000)return 'Fewer than two minutes remain in this round. New entries stop two minutes before close.';
- if(Date.parse(m.latest_expiration_time||m.expiration_time||m.close_time)>now+policyFor(agent).maximumHorizonDays*MS_DAY)return 'Latest settlement is beyond the 30-day allowed horizon.';
+ if(agent.id==='A'&&Date.parse(m.close_time)-now<=policyFor(agent).alphaCloseMinutes*60000)return policyFor(agent).alphaCloseMinutes===2?'Fewer than two minutes remain in this round. New entries stop two minutes before close.':`Fewer than ${policyFor(agent).alphaCloseMinutes} minutes remain. Owner-selected new-entry cutoff reached.`;
+ if(Date.parse(m.latest_expiration_time||m.expiration_time||m.close_time)>now+policyFor(agent).maximumHorizonDays*MS_DAY)return `Latest settlement is beyond the ${policyFor(agent).maximumHorizonDays}-day allowed horizon.`;
  if(m.feeVerified!==true)return 'The series fee formula has not been verified. Paper fills remain blocked.';
  return null;
 }

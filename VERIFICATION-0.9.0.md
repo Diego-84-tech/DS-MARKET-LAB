@@ -14,7 +14,7 @@ Release established from actual 0.8.0 package metadata and Git history (d98b35d)
 - Corrected input presentation provides explicit raw units/dollars/cents and code-computed one-contract costs. Invalid prior prose is not recycled; latest validation feedback is provided. Prompt provenance is paper-research-v6. This does not establish profitability.
 
 ## Verification
-- 97 Node regression and feature tests pass, plus all module syntax checks.
+- 99 Node regression and feature tests pass, plus all module syntax checks.
 - Isolated PGlite test compiled base/archive/workspace migrations. Verified pinned owner reads/writes, denial to anonymous/other users, no direct client table access, confirmation, duplicate request protection, append-only instruction retirement, 125-message chronological paging, unchanged cash after likes/instructions, archive cutoff and retired read-only behavior. Test engine remains outside production dependencies.
 - Local browser fixture: all six destinations render; agent card opens exactly AlphaBot; Like becomes Liked without balance changes; saved chat displays owner and fixture reply; using chat text as an instruction only fills a draft; confirmation applies a numbered entry; paper funding confirmation shows amount and exact agent and cancellation sends no funding action.
 - 390px viewport: document width equals 390px (no horizontal overflow), email/password/editor computed fonts 16px, bottom bar absent. Manual background update preserved scrollY 742.5 and the visible agent's top at 296.578125 exactly.
@@ -28,4 +28,8 @@ Release established from actual 0.8.0 package metadata and Git history (d98b35d)
 - Browser complete archive ZIP remains limited to 50 MiB; larger archives remain stored but need the future server export. Source records and old archives are not deleted.
 
 ## Hosted release
-Pending the authorized backend migration, GitHub push and Netlify deployment. Verification is appended after publication.
+Backend migration market_lab_owner_workspace applied successfully. Imported 45 historical source entries idempotently without activating them. Initial production release 5af6ce4 deployed ready as Netlify 6afcfa8b16307031cfa75f0d. Live config reports 0.9.0 and workerConfigured=true; anonymous workspace access returns 401 and the bottom bar is absent. Scheduled worker readback at 01:09 UTC confirms mode=running, release=0.9.0, error=null, both runs active, cash unchanged ($69.53 / $665.85), and no owner instructions or policy changes applied by release.
+
+Post-migration security advisor reports only INFO for intentionally deny-by-default private RLS tables without direct policies; no Market Lab warnings. Local handler test confirms unsigned background invocations exit with 403 before state/model calls. Netlify's background transport itself returns 202 before handler execution, so 202 is not proof of authorized processing.
+
+Final correction: background chat waits briefly through worker lease contention rather than colliding with the minute scheduler forever. No extra API call is made while busy. Configurable-check error messages show owner-selected thresholds while retaining original wording for unchanged defaults. Final hosted chat/release verification follows.

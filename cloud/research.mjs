@@ -18,13 +18,13 @@ export function buyAssessment(agent,d,m,now=Date.now()){
  if(d.observedAsk!==q.price)throw Error('The reported ask disagrees with the supplied market quote.');
  if(!Number.isFinite(d.fraction)||d.fraction<=0||d.fraction>1)throw Error('Invalid cash fraction.');
  if(!Number.isInteger(d.limit)||d.limit<q.price||d.limit>9999)throw Error('Purchase limit must cover the quoted ask and stay below $1.');
- if((m.history?.samples||0)<policyFor(agent).minimumHistory)throw Error('At least three real historical observations are required before a new purchase.');
+ if((m.history?.samples||0)<policyFor(agent).minimumHistory)throw Error(policyFor(agent).minimumHistory===3?'At least three real historical observations are required before a new purchase.':`At least ${policyFor(agent).minimumHistory} real historical observations are required before a new purchase.`);
  const budget=Math.floor(agent.cash*d.fraction);let quantity=Math.min(Math.floor(q.quantity/100*.1),Math.floor(budget*100/d.limit));
  while(quantity>0&&Math.ceil(quantity*d.limit/100)+fee(quantity,d.limit,m.multiplier)>budget)quantity--;
  if(quantity<1)throw Error('Insufficient available cash or conservative displayed liquidity.');
  const fees=fee(quantity,d.limit,m.multiplier),cost=Math.ceil(quantity*d.limit/100)+fees,breakEven=cost/(quantity*100),p=d.side==='YES'?d.probability:1-d.probability;
  const assessment={version:RESEARCH_VERSION,side:d.side,quantity,limit:d.limit,entryFees:fees,maximumEntryCost:cost,breakEvenProbability:breakEven,agentProbability:p,estimatedEdge:p-breakEven,expectedNetCents:p*quantity*100-cost,forecastVerified:false,historySamples:m.history.samples,at:new Date(now).toISOString()};
- if(p-breakEven<policyFor(agent).minimumEdge)throw Error('Forecast does not exceed fee-inclusive break-even by the required five percentage points.');
+ if(p-breakEven<policyFor(agent).minimumEdge)throw Error(policyFor(agent).minimumEdge===.05?'Forecast does not exceed fee-inclusive break-even by the required five percentage points.':`Forecast does not exceed fee-inclusive break-even by the required ${policyFor(agent).minimumEdge*100} percentage points.`);
  if(d.economicClaim!=='positive')throw Error('Purchase rationale contradicts its structured economic claim.');
  const plan=d.plan;if(!policyFor(agent).requireExitPlan&&(!plan||Object.values(plan).every(x=>x===0)))return {...assessment,plan:null};
  if(!plan||!Number.isInteger(plan.stopPrice)||!Number.isInteger(plan.takeProfitPrice)||!Number.isInteger(plan.exitAfterMinutes))throw Error('A numeric loss trigger, profit trigger and time exit are required.');
