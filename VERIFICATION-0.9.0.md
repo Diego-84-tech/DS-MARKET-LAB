@@ -33,3 +33,10 @@ Backend migration market_lab_owner_workspace applied successfully. Imported 45 h
 Post-migration security advisor reports only INFO for intentionally deny-by-default private RLS tables without direct policies; no Market Lab warnings. Local handler test confirms unsigned background invocations exit with 403 before state/model calls. Netlify's background transport itself returns 202 before handler execution, so 202 is not proof of authorized processing.
 
 Final correction: background chat waits briefly through worker lease contention rather than colliding with the minute scheduler forever. No extra API call is made while busy. Configurable-check error messages show owner-selected thresholds while retaining original wording for unchanged defaults. Final hosted chat/release verification follows.
+
+
+Final hosted checks (2026-11-18 01:12 UTC):
+- Follow-up code release e01fa2d reached ready as Netlify 6afcfb4b16307031cfa83429. All 99 tests and syntax checks pass.
+- One clearly labeled release-verification message was saved in the Rules discussion. Published worker returned status=complete and “900 raw units equal $0.09.” using the existing model. No instruction was applied, and no trade/funding action was executed by chat.
+- Runtime mode running; last tick 01:12:07 UTC; error null; both original run IDs active and cash still $69.53/$665.85. AlphaBot has a v6 decision; Beta retains its original provenance until its next scheduled decision. Global budget caps remain $1/day and $30 total. Owner policy/instructions are still null (no release-time strategy changes).
+- All three new workspace tables have RLS and no anon/authenticated direct SELECT privileges. Rules history includes original source and source-level controls, including request limits and technical setting ranges.
